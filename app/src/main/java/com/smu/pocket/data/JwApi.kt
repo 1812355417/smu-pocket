@@ -1,10 +1,11 @@
-﻿package com.smu.pocket.data
+package com.smu.pocket.data
 
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.http.Field
 import retrofit2.http.FormUrlEncoded
+import retrofit2.http.GET
 import retrofit2.http.POST
 
 /**
@@ -14,20 +15,17 @@ import retrofit2.http.POST
  * 再用 [com.smu.pocket.data.model.JwJson] 手动解码。
  *
  * 为什么不直接 `Response<TimetableResponse>`：
- * 1. 响应格式还没稳定（整学期 / 按周两套字段），出问题时要能一眼看到原始 JSON；
+ * 1. 响应格式有两套（整学期 / 按周），出问题时要能一眼看到原始 JSON；
  * 2. 不额外引 converter 依赖，解码逻辑集中在 JwJson 一个文件里，好调试。
- * 等接口彻底稳定了再换 typed 版也不迟。
  */
 interface JwApi {
 
     /**
-     * 课表。实测：`POST /new/student/xsgrkb/getCalendarWeekDatas`
+     * 课表。`POST /new/student/xsgrkb/getCalendarWeekDatas`
      *
-     * - `xnxqdm`：学期代码，实测 `202601`
-     * - `zc`：**实测恒为 `201`，跟网页上选第几周完全无关**，是固定值（含义未知，可能是查询模式）。
-     *   真正定位周次的是 `d1`/`d2`，所以这里保留成参数，但调用方永远传 `zc`。
-     * - `d1` / `d2`：日期区间，格式 `yyyy-MM-dd 00:00:00`。**d2 传下周一**（左闭右开），
-     *   实测查第 9 周是 `d1=2026-10-26`、`d2=2026-11-02`。
+     * - `xnxqdm`：学期代码，如 `202601`
+     * - `zc`：**第几周**。`zc=9` → 第 9 周；`zc=` 空 → 整学期总表
+     * - 按周查询的响应里带 `qsrq`（真实日期），整学期总表没有
      */
     @FormUrlEncoded
     @POST("new/student/xsgrkb/getCalendarWeekDatas")
@@ -37,10 +35,10 @@ interface JwApi {
     ): Response<ResponseBody>
 
     /**
-     * 成绩。**路径已确认**：`POST /new/student/xskccj/kccjDatas`
+     * 成绩。`POST /new/student/xskccj/kccjDatas`
      *
-     * **分页**：实测 `total=50` 但只返回 20 行，默认页大小 20。
-     * 调用方必须循环翻页，否则只会拿到 2/5 的成绩，而且**不报错**。
+     * **分页**：实测 `total=50` 但默认只返回 20 行，调用方必须循环翻页，
+     * 否则只会拿到部分成绩而且**不报错**。
      */
     @FormUrlEncoded
     @POST("new/student/xskccj/kccjDatas")
@@ -51,6 +49,18 @@ interface JwApi {
         @Field("page") page: Int = 1,
         @Field("rows") rows: Int = 200,
     ): Response<ResponseBody>
+
+    /**
+     * 成绩页（HTML）。
+     *
+     * 用来从学期下拉里解析「当前学期」—— 教务没有独立的学期查询接口，
+     * 学期列表是服务端渲染在这个页面里的。
+     *
+     * 未登录时会返回登录页（HTTP 200 但内容不含 `<option>`），
+     * [TermResolver.parseTerm] 会返回 null 并落到日期推算。
+     */
+    @GET("new/student/xskccj/kccjList.page")
+    suspend fun termPage(): Response<ResponseBody>
 
     companion object {
         fun create(retrofit: Retrofit): JwApi = retrofit.create(JwApi::class.java)

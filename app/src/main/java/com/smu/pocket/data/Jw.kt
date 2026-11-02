@@ -48,6 +48,9 @@ interface JwService {
      */
     suspend fun termCourses(): List<Course> = emptyList()
 
+    /** 当前使用的学期代码（如 "202601"）。演示实现返回 null。 */
+    suspend fun semesterCode(): String? = null
+
     /**
      * 用**一次**请求判断会话是否有效（扫码登录轮询用，必须轻量）。
      * 演示实现直接返回 false —— 只有真接口才知道登录态。

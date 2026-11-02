@@ -46,6 +46,8 @@ data class UiState(
     val currentCoursesWeek: Int = 0,
     /** 整学期课表（含考试安排），供「近期考试」使用 */
     val termCourses: List<Course> = emptyList(),
+    /** 当前使用的学期代码，如 "202601" */
+    val semesterCode: String? = null,
     val grades: List<Grade> = emptyList(),
     val currentWeek: Int = 1,
     val selectedWeek: Int = 1,
@@ -304,6 +306,9 @@ class AppViewModel(
                     emptyList()
                 }
 
+                // 学期代码在 update 之外取：update 的 lambda 可能因 CAS 重试执行多次
+                val termCode = runCatching { jw.semesterCode() }.getOrNull()
+
                 _state.update {
                     it.copy(
                         loading = false,
@@ -311,6 +316,7 @@ class AppViewModel(
                         scheduleCourses = courses,
                         currentWeekCourses = courses,
                         currentCoursesWeek = current,
+                        semesterCode = termCode,
                         nextWeekCourses = nextCourses,
                         currentWeek = current,
                         selectedWeek = current,

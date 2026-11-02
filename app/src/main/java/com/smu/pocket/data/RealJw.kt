@@ -1,10 +1,11 @@
-﻿package com.smu.pocket.data
+package com.smu.pocket.data
 
 import com.smu.pocket.core.Course
 import com.smu.pocket.core.Grade
 import com.smu.pocket.core.Period
 import com.smu.pocket.core.Semester
 import com.smu.pocket.core.SessionExpiredException
+import com.smu.pocket.core.TermCode
 import com.smu.pocket.core.TimeUtils
 import com.smu.pocket.core.TimetableConfig
 import com.smu.pocket.data.model.CourseData
@@ -17,18 +18,17 @@ import okhttp3.ResponseBody
 import retrofit2.Response
 
 /**
- * 真实教务实现。所有结论都来自真机实测（2026-10-30，见 smu-probe/教务接口规格.md §6）：
+ * 真实教务实现。结论全部来自真机实测（见 smu-probe/教务接口规格.md）：
  *
- * 1. **`zc` 就是「第几周」**。`zc=9` → 第 9 周的课；`zc=` 空 → 整学期总表；`zc=201` → 空数组。
- *    之前「zc 恒为 201」的判断是错的 —— `d1`/`d2` 对返回结果没有任何影响。
- * 2. **`Referer` 必须带**，否则返回 `{"code":-401,"message":"疑似非法请求…"}`。
- *    已经在 [com.smu.pocket.core.BrowserHeadersInterceptor] 里统一补。
- * 3. **未登录是 HTTP 200 + `code:-401`**，不是 401 状态码。要翻译成 [SessionExpiredException]。
- * 4. 第 1 周的课表带 `qsrq`（真实日期），所以「第一周周一」可以从它反推，不需要校历接口。
+ * 1. **`zc` 就是「第几周」**：`zc=9` → 第 9 周；`zc=` 空 → 整学期总表；`zc=201` → 空数组。
+ * 2. **`Referer` 必须带**，否则 `{"code":-401,"message":"疑似非法请求…"}`。
+ * 3. **未登录是 HTTP 200 + `code:-401`**，要翻译成 [SessionExpiredException]。
+ * 4. 第 1 周的课表带 `qsrq`，所以「第一周周一」可以从它反推，不需要校历接口。
+ * 5. **学期代码不再写死**：交给 [TermResolver] 动态解析（教务页面 → 缓存 → 日期推算 → 常量）。
  */
 class RealJw(
     private val api: JwApi,
-    private val term: String = DEFAULT_TERM,
+    private val terms: TermResolver,
     /**
      * 手填的「第一周周一」。填了就跳过自举。
      * 自举依赖「第 1 周查询会返回 qsrq」这个假设 —— 实测成立，
@@ -38,8 +38,27 @@ class RealJw(
 ) : JwService {
 
     private var anchor: TimetableConfig? = null
+
     /** 整学期总表缓存：bootstrap 时拉过一次，别重复请求 */
     private var termRows: List<CourseData>? = null
+
+    /** 解析出来的学期代码，进程内缓存，避免每次请求都解析一遍 */
+    private var resolvedTerm: String? = null
+
+    /**
+     * 当前学期代码。首次调用会触发 [TermResolver.resolve]（最多一次页面请求），
+     * 之后走内存缓存。
+     */
+    private suspend fun term(): String =
+        resolvedTerm ?: terms.resolve().code.also { resolvedTerm = it }
+
+    /**
+     * 探针专用：**不触发网络解析**。
+     * 扫码时每 2 秒调一次 [probeSession]，绝不能因为它去抓学期页。
+     */
+    private fun termForProbe(): String = resolvedTerm ?: terms.peek()
+
+    override suspend fun semesterCode(): String = term()
 
     override suspend fun timetableConfig(): TimetableConfig = bootstrap()
 
@@ -72,7 +91,7 @@ class RealJw(
 
         // 实测 rows=200 时 total=50、一次拿全；保留循环以防以后成绩变多
         while (page <= MAX_PAGES) {
-            val body = requestBody { api.scores(term = term.orEmpty(), page = page) }
+            val body = requestBody { api.scores(term = term ?: term(), page = page) }
             val parsed = JwJson.scores(body)
             throwIfAuthFailed(parsed.code, parsed.message)
 
@@ -89,9 +108,10 @@ class RealJw(
      * 不走 bootstrap（那要 2~3 个请求），因为扫码时会每 2 秒探一次。
      */
     override suspend fun probeSession(): Boolean {
-        val body = requestBody { api.timetable(term = term, zc = "1") }
+        val body = requestBody { api.timetable(term = termForProbe(), zc = "1") }
         return JwJson.timetable(body).code == 0
     }
+
     // ------------------------------------------------------------------
     // 自举：第一周周一 + 总周数
     // ------------------------------------------------------------------
@@ -128,35 +148,30 @@ class RealJw(
         return mondays.minOrNull()
     }
 
-    /** "202601" → "2026-2027 学年 第 1 学期" */
-    private fun termDisplayName(code: String): String {
-        val year = code.take(4).toIntOrNull() ?: return code
-        val half = code.drop(4).toIntOrNull() ?: return code
-        val start = if (half == 1) year else year - 1
-        return "$start-${start + 1} 学年 第 ${if (half == 1) 1 else 2} 学期"
-    }
     /** `zc` 传空 → 整学期总表 → 所有周次串里的最大周次就是总周数 */
     private suspend fun deriveTotalWeeks(): Int {
         val weeks = fetchAllWeeks().flatMap { TimeUtils.parseWeekList(it.zc) }
         return weeks.maxOrNull()?.coerceIn(MIN_WEEKS, MAX_WEEKS) ?: DEFAULT_TOTAL_WEEKS
     }
 
-    private fun configOf(firstMonday: LocalDate, totalWeeks: Int): TimetableConfig =
-        TimetableConfig(termDisplayName(term), firstMonday, totalWeeks, DEFAULT_PERIODS)
+    private suspend fun configOf(firstMonday: LocalDate, totalWeeks: Int): TimetableConfig {
+        val name = TermCode.displayName(term())
+        return TimetableConfig(name, firstMonday, totalWeeks, DEFAULT_PERIODS)
             .also { anchor = it }
+    }
 
     // ------------------------------------------------------------------
     // 底层请求
     // ------------------------------------------------------------------
 
     private suspend fun fetchWeek(week: Int): List<CourseData> {
-        val body = requestBody { api.timetable(term = term, zc = week.toString()) }
+        val body = requestBody { api.timetable(term = term(), zc = week.toString()) }
         return decodeTimetable(body)
     }
 
     private suspend fun fetchAllWeeks(): List<CourseData> {
         termRows?.let { return it }
-        val body = requestBody { api.timetable(term = term, zc = "") }
+        val body = requestBody { api.timetable(term = term(), zc = "") }
         return decodeTimetable(body).also { termRows = it }
     }
 
@@ -181,8 +196,6 @@ class RealJw(
     }
 
     companion object {
-        /** 学期代码，每学期改一次 */
-        const val DEFAULT_TERM = "202601"
 
         private const val MAX_PAGES = 20
         private const val MIN_WEEKS = 16

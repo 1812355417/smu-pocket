@@ -2,6 +2,7 @@
 
 import android.app.Application
 import com.smu.pocket.core.CacheStore
+import com.smu.pocket.core.TermStore
 import com.smu.pocket.core.JwClient
 import com.smu.pocket.core.OkHttpTransport
 import com.smu.pocket.core.SessionStore
@@ -10,6 +11,7 @@ import com.smu.pocket.data.JwApi
 import com.smu.pocket.data.JwConfig
 import com.smu.pocket.data.JwService
 import com.smu.pocket.data.RealJw
+import com.smu.pocket.data.TermResolver
 
 class App : Application() {
 
@@ -29,6 +31,9 @@ class AppContainer(app: Application) {
 
     val session: SessionStore = SessionStore(app)
     val cache: CacheStore = CacheStore(app)
+    val termStore: TermStore = TermStore(app)
+    /** 学期代码解析：教务页面 → 本地缓存 → 日期推算 → 常量 */
+    private val termResolver: TermResolver by lazy { TermResolver(jwApi, termStore) }
 
     @Suppress("unused")
     val transport = OkHttpTransport(session)
@@ -44,5 +49,5 @@ class AppContainer(app: Application) {
      * 扫码登录完之后还一直在用启动时选中的实现 —— 很隐蔽的坑。
      */
     fun jwService(): JwService =
-        if (session.isLoggedIn()) RealJw(jwApi) else FakeJw()
+        if (session.isLoggedIn()) RealJw(jwApi, termResolver) else FakeJw()
 }

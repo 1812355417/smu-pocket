@@ -87,6 +87,7 @@ fun SettingsScreen(
                 },
             )
             LabelValue("当前学期", state.config?.termName ?: "—")
+            LabelValue("学期代码", state.semesterCode ?: "—（演示数据）")
             LabelValue("第一周周一", state.config?.firstMonday?.toString() ?: "—")
             LabelValue("总周数", state.config?.totalWeeks?.toString() ?: "—")
             LabelValue("课表数据", "${state.scheduleCourses.size} 条")
