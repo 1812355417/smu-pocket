@@ -20,8 +20,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.smu.pocket.ui.grades.GradesScreen
 import com.smu.pocket.ui.login.LoginScreen
@@ -49,12 +47,6 @@ fun RootScreen(vm: AppViewModel) {
             onLoginCancelled = vm::onLoginCancelled,
         )
         return
-    }
-
-    // 从后台回到前台时检查一次日期：手机锁屏过夜后再打开，
-    // 「今日/明日」必须换成新的一天，而不是接着昨天的
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        vm.onDateMaybeChanged()
     }
 
     var tabName by rememberSaveable { mutableStateOf(Tab.Today.name) }

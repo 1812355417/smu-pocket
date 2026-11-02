@@ -21,7 +21,6 @@ import com.smu.pocket.data.JwService
 import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,13 +54,6 @@ data class UiState(
     /** 切周失败的原因；null = 没有错误 */
     val weekError: String? = null,
 
-    /**
-     * 当前日期。跨天（或跨周）后由 [AppViewModel.onDateMaybeChanged] 更新，
-     * 一旦变化，「今日/明日课程」会自动重算 —— 不能每次现读 LocalDate.now()，
-     * 那样 Compose 不知道该重组。
-     */
-    val today: LocalDate = LocalDate.now(),
-
     /** 当前使用的学期代码，如 "202601" */
     val semesterCode: String? = null,
     val grades: List<Grade> = emptyList(),
@@ -85,7 +77,7 @@ data class UiState(
     // 这里绝对不能复用 scheduleCourses —— 那是「用户翻到的那一周」。
     // 用户在课表翻到第 8 周时，今日页必须仍然是第 9 周（真实当前周）的课。
 
-    private val todayIndex: Int get() = today.dayOfWeek.value
+    private val todayIndex: Int get() = LocalDate.now().dayOfWeek.value
 
     val todayCourses: List<Course>
         get() = currentWeekCourses
@@ -104,7 +96,7 @@ data class UiState(
     // 注意跨周：今天是周日时，明天属于**下一周**，当前周的数据里没有明天的课。
     // 所以 loadAll 会在这种情况下额外拉一次下一周，存进 nextWeekCourses。
 
-    private val tomorrowDate: LocalDate get() = today.plusDays(1)
+    private val tomorrowDate: LocalDate get() = LocalDate.now().plusDays(1)
 
     /** 明天是第几周（拿不到 config 时为 null） */
     val tomorrowWeek: Int?
@@ -200,15 +192,6 @@ class AppViewModel(
             _state.update { it.copy(loggedIn = true) }
             loadAll()
         }
-
-        // 跨日检查：App 一直开着也不能停在昨天。
-        // 每分钟看一次系统日期，变了就刷新（不跨周时不发网络请求）。
-        viewModelScope.launch {
-            while (true) {
-                delay(60_000)
-                onDateMaybeChanged()
-            }
-        }
     }
 
     /** @return 是否成功恢复了缓存 */
@@ -237,31 +220,6 @@ class AppViewModel(
             )
         }
         return true
-    }
-
-    /**
-     * 日期可能变了：跨过 00:00，或者 App 从后台回到前台。
-     *
-     * 「今日/明日」的课程是按 [UiState.today] 现算的，
-     * 所以只要把 today 换成新日期，Compose 就会重组、列表自动换天。
-     * 如果顺带跨了周，当前周的课表已经不对，要重新拉一次。
-     */
-    fun onDateMaybeChanged() {
-        val now = LocalDate.now()
-        val s = _state.value
-        if (now == s.today) return
-
-        val config = s.config
-        val newWeek = config?.let {
-            Semester.clampWeek(Semester.weekOf(now, it.firstMonday), it.totalWeeks)
-        } ?: s.currentWeek
-
-        _state.update { it.copy(today = now) }
-
-        // 跨周了：换一种「本周」的课，必须重新请求
-        if (newWeek != s.currentWeek && session.isLoggedIn()) {
-            loadAll()
-        }
     }
 
     /** 登录页的「先用演示数据看看」 */
