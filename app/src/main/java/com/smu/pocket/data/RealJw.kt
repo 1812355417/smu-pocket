@@ -74,9 +74,6 @@ class RealJw(
         // 响应里没有 zc（按周查的嘛），但「我查的是第 target 周」我自己知道
         val rows = fetchWeek(target)
         val mapped = rows.mapNotNull { it.toCourse(fallbackWeek = target) }
-        Log.d("RealJw", "timetable week=$target rows=${rows.size} mapped=${mapped.size}")
-        rows.filter { row -> mapped.none { it.startSection.toString() == row.ps } }.take(3).forEach { row ->
-            Log.d("RealJw", "  被丢弃的行: kcmc=${row.kcmc} xq=${row.xq} zc=${row.zc} ps=${row.ps} pe=${row.pe}")
         }
         return mapped
     }

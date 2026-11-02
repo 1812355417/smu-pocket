@@ -191,4 +191,35 @@ class JwJsonTest {
         assertTrue(resp.rows.isEmpty())
         assertTrue("不能假装成功", !resp.hasMore)
     }
+    // ------------------------------------------------------------------
+    // 课表：真实第 11 周（回归用）
+    // ------------------------------------------------------------------
+
+    /**
+     * 线上曾出现「第 11 周显示 0 节」，但服务器实际有 7 门课。
+     *
+     * 这份 fixture 就是那次从服务器抓到的**原样响应**（姓名/工号已脱敏）。
+     * 它证明：只要请求成功，解析一定能得到 7 门属于第 11 周的课 ——
+     * 所以「0 节」只可能来自请求失败，而不是解析。
+     */
+    @Test
+    fun parsesRealWeek11Timetable() {
+        val resp = JwJson.timetable(fixture("timetable_week11.json"))
+
+        assertEquals(0, resp.code)
+        assertEquals(7, resp.data.size)
+
+        // 按周查询的响应里 zc 是数字 11（不是字符串），柔性序列化器要能吃掉
+        assertTrue(resp.data.all { it.zc == "11" })
+
+        val courses = resp.data.mapNotNull { it.toCourse(fallbackWeek = 11) }
+        assertEquals("7 行都必须映射成功", 7, courses.size)
+        assertTrue("每门课都要落在第 11 周", courses.all { it.occursIn(11) })
+        assertTrue(courses.all { it.dayOfWeek in 1..7 })
+        assertTrue(courses.all { it.startSection >= 1 && it.endSection >= it.startSection })
+        assertEquals(
+            listOf("机能实验学二", "药理学", "药理学", "实验诊断学", "实验诊断学", "手术学基础", "临床诊断学"),
+            courses.map { it.name },
+        )
+    }
 }
