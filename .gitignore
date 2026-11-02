@@ -18,6 +18,8 @@ captures/
 .externalNativeBuild
 
 # ===== Gradle / IDE =====
+# Kotlin 2.0 编译器的会话缓存
+.kotlin/
 .gradle/
 .idea/
 *.iml
