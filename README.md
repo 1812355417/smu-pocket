@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 # 南医大口袋 · SMU Pocket
 
@@ -79,7 +79,7 @@
 | 登录 | `WebView` + `CookieManager` | 不接触密码，只采集 cookie |
 | 构建 | Gradle 8.9 · AGP 8.7.3 · JDK 17 | `compileSdk 35` / `minSdk 26` / `targetSdk 35` |
 | 压缩 | **R8**（`isMinifyEnabled = true`） | debug 16.7 MB → release **1.5 MB** |
-| 测试 | JUnit 4 | **45 个单测**，跑夹具不需网络 |
+| 测试 | JUnit 4 | **57 个单测**，跑夹具不需网络 |
 
 **刻意的取舍**：不引 Hilt/Koin、不引 Room、不引 Navigation 库。整个 App 就两三个对象，
 手写容器（`AppContainer`）比引框架便宜；接口改版时只改 `data/model/Mappers.kt` 一个文件。
@@ -127,7 +127,7 @@ org.gradle.java.home=C:/path/to/your/jdk-17
 ### 4. 构建
 
 ```bash
-# 单元测试（不需要真机，45 个用例）
+# 单元测试（不需要真机，57 个用例）
 ./gradlew testDebugUnitTest
 
 # 调试包 → app/build/outputs/apk/debug/app-debug.apk
@@ -189,7 +189,7 @@ smu-pocket/
 │  │  ├─ RealJw.kt       真实实现：自举 + 按周拉取 + 分页成绩
 │  │  └─ model/          JSON 模型、柔性序列化器、映射
 │  └─ ui/                今日 / 课表 / 成绩 / 设置 / 登录
-├─ app/src/test/         45 个单测 + 4 份脱敏夹具
+├─ app/src/test/         57 个单测 + 5 份脱敏夹具
 ├─ docs/
 │  ├─ architecture.md    架构与关键机制
 │  ├─ capture-checklist.md  抓包清单（接口调研的起点）
@@ -262,6 +262,28 @@ fun dateOf(firstMonday: LocalDate, week: Int, dayOfWeek: Int): LocalDate =
 
 ---
 
+## 更新记录
+
+### v0.1.0（首个可用版本）
+
+- 扫码登录（WebView 采集 cookie，不接触密码）
+- 课表：按周切换、教务配色、跨节合并、自主学习标注
+- 成绩：按学期折叠、加权绩点/均分统计
+- 今日：今日/明日课程、本周概览
+- 考试安排：从整学期总表提取，自动过滤过期
+- 学期代码动态推算，新学期无需改代码
+- 本地缓存 + 手动同步，会话过期自动回登录页
+
+### 上线后修复的问题
+
+| 问题 | 原因 | 修复 |
+|---|---|---|
+| 课表/成绩全部读不到 | 抓教务页面的学期下拉「取最大六位数」，误取到 203402（2034 年） | 去掉网页抓取，改用日期推算 |
+| 成绩页空白 | 成绩接口误传当前学期代码，开学初本学期无成绩 → 0 条 | 改为传空查询全部学期 |
+| 切周失败显示「该周 0 节」 | 请求失败后沿用上一周课表再按新周过滤 → 0 条 | 新增 `weekError`，明确显示失败原因 |
+| 成绩被清空 | 成绩请求失败时把空列表写入缓存 | 用 `gradesLoaded` 标记，失败时沿用旧缓存 |
+
+以上问题均已通过真机验证：第 10/11/12 周课表、成绩 50 门、断网提示全部正确。
 ## 免责声明
 
 - 本项目仅供**学习交流与个人使用**，请勿用于商业用途
