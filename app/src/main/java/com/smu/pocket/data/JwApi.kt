@@ -1,11 +1,10 @@
-package com.smu.pocket.data
+﻿package com.smu.pocket.data
 
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.http.Field
 import retrofit2.http.FormUrlEncoded
-import retrofit2.http.GET
 import retrofit2.http.POST
 
 /**
@@ -50,17 +49,6 @@ interface JwApi {
         @Field("rows") rows: Int = 200,
     ): Response<ResponseBody>
 
-    /**
-     * 成绩页（HTML）。
-     *
-     * 用来从学期下拉里解析「当前学期」—— 教务没有独立的学期查询接口，
-     * 学期列表是服务端渲染在这个页面里的。
-     *
-     * 未登录时会返回登录页（HTTP 200 但内容不含 `<option>`），
-     * [TermResolver.parseTerm] 会返回 null 并落到日期推算。
-     */
-    @GET("new/student/xskccj/kccjList.page")
-    suspend fun termPage(): Response<ResponseBody>
 
     companion object {
         fun create(retrofit: Retrofit): JwApi = retrofit.create(JwApi::class.java)

@@ -1,4 +1,4 @@
-package com.smu.pocket.core
+﻿package com.smu.pocket.core
 
 import android.content.Context
 
@@ -13,7 +13,8 @@ class TermStore(context: Context) {
 
     private val prefs = context.getSharedPreferences(PREF, Context.MODE_PRIVATE)
 
-    fun load(): String? = prefs.getString(KEY_CODE, null)?.takeIf { TermCode.isValid(it) }
+    /** 只认「像学期」的代码，坏值当作没有（否则一次抓错会永久污染缓存） */
+    fun load(): String? = prefs.getString(KEY_CODE, null)?.takeIf { TermCode.isPlausible(it) }
 
     fun save(code: String, source: String) {
         prefs.edit()
@@ -32,7 +33,7 @@ class TermStore(context: Context) {
 
     private companion object {
         const val PREF = "smu_term"
-        const val KEY_CODE = "term_code"
+        const val KEY_CODE = "term_code_v2"   // v2：旧版曾把 203402 写进来，换 key 直接作废
         const val KEY_SOURCE = "term_source"
         const val KEY_SAVED_AT = "term_saved_at"
     }

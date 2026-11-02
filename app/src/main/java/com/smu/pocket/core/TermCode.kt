@@ -1,4 +1,4 @@
-package com.smu.pocket.core
+﻿package com.smu.pocket.core
 
 import java.time.LocalDate
 
@@ -74,4 +74,20 @@ object TermCode {
     }
 
     fun isValid(code: String?): Boolean = code != null && SHORT.matches(code)
+
+    /**
+     * 这个代码像不像「真的学期」。
+     *
+     * 起因：教务页面的 `<select>` 里混着非学期的六位数字（实测抓到 `203402`），
+     * 天真的「取最大六位数」会把它们当成学期，导致所有请求用错 `xnxqdm`、返回空数据。
+     *
+     * 规则：学期号只能是 1 或 2，且学年起始年离今天不超过 ±1 年。
+     */
+    fun isPlausible(code: String?, today: LocalDate = LocalDate.now()): Boolean {
+        if (!isValid(code)) return false
+        val startYear = code!!.take(4).toIntOrNull() ?: return false
+        val half = code.drop(4).toIntOrNull() ?: return false
+        if (half != 1 && half != 2) return false
+        return kotlin.math.abs(startYear - today.year) <= 1
+    }
 }

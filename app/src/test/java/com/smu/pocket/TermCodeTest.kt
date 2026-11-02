@@ -1,18 +1,19 @@
 package com.smu.pocket
 
 import com.smu.pocket.core.TermCode
-import com.smu.pocket.data.TermResolver
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 学期代码换算与推算。
+ * 学期代码换算、推算与合理性校验。
  *
- * 期望值来自真实数据：`xnxqdm=202502` ↔ `xnxqmc="2025-2026-2"`
- * （见 smu-probe/字段字典-自动生成.md）。
+ * 表里的 202601 / 202502 来自真实抓包对照（见 smu-probe/字段字典-自动生成.md），
+ * 203402 来自教务页面下拉里的真实取值 —— 它是个**未来学期**，
+ * 说明「下拉里最大的那个」根本不是当前学期（这正是线上那个 bug 的成因）。
  */
 class TermCodeTest {
 
@@ -34,8 +35,8 @@ class TermCodeTest {
     fun rejectsGarbage() {
         assertNull(TermCode.fromDisplayName(null))
         assertNull(TermCode.fromDisplayName(""))
-        assertNull(TermCode.fromDisplayName("2026-2027"))       // 没有学期号
-        assertNull(TermCode.fromDisplayName("第 1 学期"))        // 没有学年
+        assertNull(TermCode.fromDisplayName("2026-2027"))   // 没有学期号
+        assertNull(TermCode.fromDisplayName("第 1 学期"))    // 没有学年
     }
 
     // ---------- 短代码 → 长串 ----------
@@ -43,7 +44,6 @@ class TermCodeTest {
     @Test
     fun expandsShortCode() {
         assertEquals("2026-2027 学年 第 1 学期", TermCode.displayName("202601"))
-        // 第 2 学期的年份是学年起始年，不是结束年
         assertEquals("2025-2026 学年 第 2 学期", TermCode.displayName("202502"))
     }
 
@@ -77,51 +77,37 @@ class TermCodeTest {
     }
 
     @Test
-    fun computedCodeIsAlwaysWellFormed() {
+    fun computedCodeIsAlwaysPlausible() {
         var d = LocalDate.of(2025, 1, 1)
         while (d.year < 2032) {
             val code = TermCode.fromDate(d)
-            assertTrue("$d 推算出非法代码 $code", TermCode.isValid(code))
+            assertTrue("$d 推算出 $code，但被判为不合理", TermCode.isPlausible(code, d))
             val startYear = TermCode.displayName(code).take(4).toInt()
             assertTrue("$d → $code 的学年不覆盖当年", d.year >= startYear && d.year <= startYear + 1)
             d = d.plusDays(17)
         }
     }
 
-    // ---------- 从教务页面 HTML 里抠学期 ----------
+    // ---------- 合理性校验（回归：页面上限 203402 不是当前学期）----------
 
     @Test
-    fun parsesSelectedOption() {
-        val html = """
-            <select id="xnxqdm" name="xnxqdm">
-              <option value="202502">2025-2026学年第二学期</option>
-              <option value="202601" selected>2026-2027学年第一学期</option>
-            </select>
-        """.trimIndent()
-        assertEquals("202601", TermResolver.parseTerm(html))
+    fun acceptsNormalTerms() {
+        val today = LocalDate.of(2026, 11, 2)
+        assertTrue(TermCode.isPlausible("202601", today))
+        assertTrue(TermCode.isPlausible("202502", today))
+        assertTrue(TermCode.isPlausible("202602", today))
+        assertTrue(TermCode.isPlausible("202702", today))   // 跨一年，仍算合理
     }
 
     @Test
-    fun parsesSelectedWhenSelectedComesFirst() {
-        assertEquals("202601", TermResolver.parseTerm("""<option selected value='202601'>第一学期</option>"""))
-    }
-
-    @Test
-    fun fallsBackToLargestWhenNothingSelected() {
-        val html = """
-            <option value="202502">上学期</option>
-            <option value="202601">本学期</option>
-        """.trimIndent()
-        assertEquals("202601", TermResolver.parseTerm(html))
-    }
-
-    @Test
-    fun returnsNullForLoginPage() {
-        val loginPage = """
-            <!DOCTYPE html><html><head><title>登录</title></head>
-            <body><div class="login"></div></body></html>
-        """.trimIndent()
-        assertNull(TermResolver.parseTerm(loginPage))
-        assertNull(TermResolver.parseTerm(""))
+    fun rejectsFarFutureAndMalformed() {
+        val today = LocalDate.of(2026, 11, 2)
+        // 教务页面下拉里真的有 203402（2034-2035 第 2 学期），绝不能当当前学期
+        assertFalse(TermCode.isPlausible("203402", today))
+        assertFalse(TermCode.isPlausible("201801", today))
+        assertFalse(TermCode.isPlausible("202603", today))   // 学期号只能是 1/2
+        assertFalse(TermCode.isPlausible("202600", today))
+        assertFalse(TermCode.isPlausible("2026", today))
+        assertFalse(TermCode.isPlausible(null, today))
     }
 }

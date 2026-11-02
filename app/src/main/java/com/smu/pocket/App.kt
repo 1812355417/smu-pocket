@@ -33,7 +33,7 @@ class AppContainer(app: Application) {
     val cache: CacheStore = CacheStore(app)
     val termStore: TermStore = TermStore(app)
     /** 学期代码解析：教务页面 → 本地缓存 → 日期推算 → 常量 */
-    private val termResolver: TermResolver by lazy { TermResolver(jwApi, termStore) }
+    private val termResolver: TermResolver by lazy { TermResolver(termStore) }
 
     @Suppress("unused")
     val transport = OkHttpTransport(session)

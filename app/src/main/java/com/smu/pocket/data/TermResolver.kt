@@ -1,107 +1,67 @@
 package com.smu.pocket.data
 
+import android.util.Log
 import com.smu.pocket.core.TermCode
 import com.smu.pocket.core.TermStore
-import java.time.LocalDate
 
 /**
  * 解析「当前学期代码」。
  *
- * ## 为什么不是「先调学期接口」
+ * ## 结论：这个教务系统拿不到「当前学期」
  *
- * 这个教务系统**没有**查询当前学期的 JSON 接口。实测结论：
+ * 实测过的所有途径：
  *
- * | 候选路径 | 结果 |
+ * | 途径 | 结果 |
  * |---|---|
- * | `POST /new/student/xsgrkb/getXnxqList` | 404 |
- * | `POST /new/common/getXnxq` | 404 |
- * | `POST /new/calendar/getCalendar` | 404 |
- * | `GET  /new/student/xskccj/kccjList.page` | 200，但**未登录时返回的就是登录页**，没有学期下拉 |
+ * | `POST /new/student/xsgrkb/getXnxqList` 等 6 个 JSON 接口 | 全部 404 |
+ * | `GET /new/student/xskccj/kccjList.page` | 返回 HTML，`<select id='xnxqdm'>` 里确实有学期列表 |
  *
- * 所以改成「能拿到就用，拿不到就推算」的四级链，每一级都向前兜底：
+ * 但那个下拉是**全量列表**（实测 202001 ~ 203402，最新在前），
+ * **没有任何 `selected` 标记** —— 当前学期是 JS 运行时选的，静态 HTML 里看不出来。
+ *
+ * 早期实现「取最大六位数」直接把 203402 当成了当前学期，
+ * 导致所有请求用错 `xnxqdm`、**全部返回空数据**。这条路走不通。
+ *
+ * ## 所以用日期推算
+ *
+ * 学年 9 月开学、2 月开学，边界固定，推算结果与教务一致，
+ * 而且**不依赖网络、不会因为页面改版而失效**：
  *
  * ```
- * ① 教务页面 HTML 里的学期下拉（需要已登录）
- * ② 本地缓存（上次成功解析到的）
- * ③ 按日期推算（无网络也能工作，实测与教务一致）
- * ④ 常量 202601
+ * 9~12 月 → 当年第 1 学期（202601）
+ * 1 月    → 上一年第 1 学期（202601）
+ * 2~8 月  → 上一年第 2 学期（202602）
  * ```
  *
- * 第 ③ 级是真正解决问题的那一级：学期边界固定（9 月开学），
- * 所以**以后新学期不需要改代码、不需要重新打包**。
+ * 这同样满足「新学期不用改代码、不用重新打包」的目标。
  */
-class TermResolver(
-    private val api: JwApi,
-    private val store: TermStore,
-) {
+class TermResolver(private val store: TermStore) {
 
-    enum class Source { WEB, CACHE, DATE, FALLBACK }
+    enum class Source { CACHE, DATE, FALLBACK }
 
     data class Resolved(val code: String, val source: Source)
 
-    /** 完整解析：可能发一次网络请求（只有第 ① 级会） */
-    suspend fun resolve(): Resolved {
-        fromWeb()?.let {
-            store.save(it, "web")
-            return Resolved(it, Source.WEB)
+    fun resolve(): Resolved {
+        store.load()?.let {
+            Log.d(TAG, "学期代码=$it 来源=CACHE")
+            return Resolved(it, Source.CACHE)
         }
 
-        store.load()?.let { return Resolved(it, Source.CACHE) }
-
         val byDate = TermCode.fromDate()
-        if (TermCode.isValid(byDate)) {
+        if (TermCode.isPlausible(byDate)) {
             store.save(byDate, "date")
+            Log.d(TAG, "学期代码=$byDate 来源=DATE（按日期推算）")
             return Resolved(byDate, Source.DATE)
         }
 
+        Log.w(TAG, "日期推算异常，使用兜底常量 ${TermCode.FALLBACK}")
         return Resolved(TermCode.FALLBACK, Source.FALLBACK)
     }
 
-    /**
-     * 不联网的「当前学期」。
-     *
-     * 给扫码轮询的探针用 —— 那个链路每 2 秒打一次，绝不能因为它去抓页面。
-     */
+    /** 不联网的「当前学期」，探针用 */
     fun peek(): String = store.load() ?: TermCode.fromDate()
 
-    // ------------------------------------------------------------------
-
-    private suspend fun fromWeb(): String? = runCatching {
-        val response = api.termPage()
-        if (!response.isSuccessful) return@runCatching null
-        val html = response.body()?.use { it.string() }.orEmpty()
-        parseTerm(html)
-    }.getOrNull()
-
-    companion object {
-
-        /**
-         * 从 HTML 里挑学期代码。
-         *
-         * 强智的学期下拉通常是：
-         * ```html
-         * <select id="xnxqdm">
-         *   <option value="202601" selected>2026-2027学年第一学期</option>
-         * </select>
-         * ```
-         *
-         * 优先取带 `selected` 的那一项；没有标记就取**最大的六位码**（学期码单调递增）。
-         * 登录页、错误页里没有 `<option>`，自然返回 null，落到下一级兜底。
-         */
-        fun parseTerm(html: String): String? {
-            if (html.isBlank()) return null
-
-            Regex("""(?is)<option[^>]*value=["'](\d{6})["'][^>]*?\bselected""")
-                .find(html)?.let { return it.groupValues[1] }
-
-            // 属性顺序可能是 selected 在前
-            Regex("""(?is)<option[^>]*?\bselected[^>]*?value=["'](\d{6})["']""")
-                .find(html)?.let { return it.groupValues[1] }
-
-            return Regex("""(?i)<option[^>]*value=["'](\d{6})["']""")
-                .findAll(html)
-                .map { it.groupValues[1] }
-                .maxOrNull()
-        }
+    private companion object {
+        const val TAG = "TermResolver"
     }
 }
