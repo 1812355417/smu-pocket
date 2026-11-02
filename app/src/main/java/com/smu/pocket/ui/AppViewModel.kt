@@ -1,5 +1,6 @@
 ﻿package com.smu.pocket.ui
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.smu.pocket.core.CacheStore
@@ -13,11 +14,12 @@ import com.smu.pocket.core.snapshotOf
 import com.smu.pocket.core.toConfig
 import com.smu.pocket.core.toCurrentCourses
 import com.smu.pocket.core.toExams
-import com.smu.pocket.core.toCourses
 import com.smu.pocket.core.toGrades
+import com.smu.pocket.core.toCourses
 import com.smu.pocket.data.FakeJw
 import com.smu.pocket.data.JwService
 import java.time.LocalDate
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +48,12 @@ data class UiState(
     val currentCoursesWeek: Int = 0,
     /** 整学期课表（含考试安排），供「近期考试」使用 */
     val termCourses: List<Course> = emptyList(),
+    /** 成绩是否成功拉取过（失败时不要把缓存里的成绩覆盖成空） */
+    val gradesLoaded: Boolean = false,
+
+    /** 切周失败的原因；null = 没有错误 */
+    val weekError: String? = null,
+
     /** 当前使用的学期代码，如 "202601" */
     val semesterCode: String? = null,
     val grades: List<Grade> = emptyList(),
@@ -348,7 +356,7 @@ class AppViewModel(
 
             try {
                 val g = jw.grades(null)
-                _state.update { it.copy(grades = g) }
+                _state.update { it.copy(grades = g, gradesLoaded = true) }
             } catch (e: Exception) {
                 // 成绩失败不影响课表
             }
@@ -396,7 +404,7 @@ class AppViewModel(
         val target = Semester.clampWeek(week, s.config?.totalWeeks ?: week)
         if (target == s.selectedWeek) return
 
-        _state.update { it.copy(selectedWeek = target) }
+        _state.update { it.copy(selectedWeek = target, weekError = null) }
         loadWeek(target)
     }
 
@@ -410,14 +418,22 @@ class AppViewModel(
             _state.update { it.copy(loading = true, error = null) }
             try {
                 val courses = jw.timetable(week)
-                _state.update { it.copy(scheduleCourses = courses, loading = false, stale = false) }
+                _state.update {
+                    it.copy(scheduleCourses = courses, loading = false, stale = false, weekError = null)
+                }
                 persistCache()
+            } catch (e: CancellationException) {
+                // 快速连点切周时上一个请求被取消，属正常流程，不是错误
+                throw e
             } catch (e: SessionExpiredException) {
                 onSessionExpired(e)
             } catch (e: Exception) {
-                _state.update { it.copy(loading = false) }
-            }
+                // 关键：失败不能表现成「该周 0 节」，否则用户会以为这周没课
+                _state.update {
+                    it.copy(loading = false, weekError = e.message ?: "加载失败，请检查网络后重试")
+                }
         }
+    }
     }
 
     private fun persistCache() {
@@ -431,7 +447,8 @@ class AppViewModel(
                 config = config,
                 scheduleCourses = s.scheduleWeekCourses,
                 currentWeekCourses = s.currentWeekCourses,
-                grades = s.grades,
+                // 这次没拉到成绩（请求失败）→ 沿用上一份缓存，别把已有成绩冲成空
+                grades = if (s.gradesLoaded) s.grades else (cache.load()?.toGrades() ?: s.grades),
                 exams = s.upcomingExams,
                 week = s.selectedWeek,
                 currentWeek = s.currentWeek,

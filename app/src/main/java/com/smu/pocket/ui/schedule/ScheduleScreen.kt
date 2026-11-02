@@ -76,8 +76,29 @@ fun ScheduleScreen(
         )
 
         Spacer(Modifier.height(8.dp))
-        DayHeader()
-        TimetableGrid(state = state, config = config, modifier = Modifier.weight(1f))
+
+        val weekError = state.weekError
+        if (weekError != null) {
+            // 加载失败不能显示成「该周 0 节」——那会让用户以为这周真的没课
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 32.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "第 ${state.selectedWeek} 周加载失败\n$weekError\n\n检查网络后，重新点一下这一周",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        } else {
+            DayHeader()
+            TimetableGrid(state = state, config = config, modifier = Modifier.weight(1f))
+        }
+
         WeekNav(onPrev = onPrevWeek, onNext = onNextWeek)
     }
 }
