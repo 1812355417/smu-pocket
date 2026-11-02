@@ -74,7 +74,6 @@ class RealJw(
         // 响应里没有 zc（按周查的嘛），但「我查的是第 target 周」我自己知道
         val rows = fetchWeek(target)
         val mapped = rows.mapNotNull { it.toCourse(fallbackWeek = target) }
-        }
         return mapped
     }
 
