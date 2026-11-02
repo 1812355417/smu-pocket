@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 只有 Compose 接管前的窗口底色，正常看不到 -->
+    <style name="Theme.SmuPocket" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

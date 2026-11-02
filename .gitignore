@@ -1,0 +1,32 @@
+# ===== 本机专用（绝不能提交）=====
+# 1.4 GB 的 JDK / Gradle / SDK，本机自备
+.toolchain/
+# 指向本机 SDK 路径
+local.properties
+keystore.properties
+*.jks
+*.keystore
+
+# ===== 构建产物 =====
+build/
+**/build/
+app/release/
+*.apk
+*.aab
+captures/
+.cxx/
+.externalNativeBuild
+
+# ===== Gradle / IDE =====
+.gradle/
+.idea/
+*.iml
+.DS_Store
+
+# ===== 抓包原始数据（可能含真实信息）=====
+*.har
+*.har.gz
+
+# ===== 日志 =====
+*.log
+build-*.log
