@@ -37,7 +37,7 @@ fun TodayScreen(
     state: UiState,
     modifier: Modifier = Modifier,
 ) {
-    val today = LocalDate.now()
+    val today = state.today
 
     Column(
         modifier
@@ -91,7 +91,7 @@ fun TodayScreen(
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = tomorrowLabel(),
+                    text = tomorrowLabel(state.today),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -108,7 +108,7 @@ fun TodayScreen(
                 )
 
                 state.tomorrowCourses.isEmpty() -> Text(
-                    text = tomorrowEmptyHint(),
+                    text = tomorrowEmptyHint(state.today),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -330,14 +330,14 @@ private fun shortTeachers(raw: String?): String? {
     else names.take(3).joinToString("、") + " 等${names.size}人"
 }
 
-private fun tomorrowDate(): LocalDate = LocalDate.now().plusDays(1)
+private fun tomorrowDate(today: LocalDate): LocalDate = today.plusDays(1)
 
-private fun tomorrowLabel(): String {
-    val d = tomorrowDate()
+private fun tomorrowLabel(today: LocalDate): String {
+    val d = tomorrowDate(today)
     return "明天 · ${d.monthValue}月${d.dayOfMonth}日 星期${cn(d.dayOfWeek.value)}"
 }
 
-private fun tomorrowEmptyHint(): String = when (tomorrowDate().dayOfWeek.value) {
+private fun tomorrowEmptyHint(today: LocalDate): String = when (tomorrowDate(today).dayOfWeek.value) {
     6 -> "明天是周六，没有课，睡个懒觉吧"
     7 -> "明天是周日，没有课，好好休息"
     else -> "明天没有课，好好休息"
