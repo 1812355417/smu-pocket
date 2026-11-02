@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 # 南医大口袋 · SMU Pocket
 
@@ -116,7 +116,7 @@ sdk.dir=C\:\\Users\\你的用户名\\AppData\\Local\\Android\\Sdk
 `gradle.properties` 里有一行：
 
 ```properties
-org.gradle.java.home=C:/Users/QIU/Desktop/SMU_Pocket/.toolchain/jdk/jdk-17.0.2
+org.gradle.java.home=C:/path/to/your/jdk-17
 ```
 
 **这是原作者机器上的绝对路径，你必须删掉或改成自己的**，否则构建会失败（路径不存在）。
