@@ -59,7 +59,11 @@ fun ScheduleScreen(
         ScreenHeader(
             title = "第 ${state.selectedWeek} 周",
             subtitle = config?.let {
-                "${it.termName} · 共 ${it.totalWeeks} 周 · 该周 ${state.selectedWeekTotal} 节"
+                run {
+                    // 加载失败时别说「该周 0 节」，那是骗人的
+                    val tail = if (state.weekError != null) "加载失败" else "该周 ${state.selectedWeekTotal} 节"
+                    "${it.termName} · 共 ${it.totalWeeks} 周 · $tail"
+                }
             } ?: "尚未连接到教务系统",
         )
 

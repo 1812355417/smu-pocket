@@ -94,7 +94,9 @@ class RealJw(
 
         // 实测 rows=200 时 total=50、一次拿全；保留循环以防以后成绩变多
         while (page <= MAX_PAGES) {
-            val body = requestBody { api.scores(term = term ?: term(), page = page) }
+            // 成绩要查**全部学期**：传空 xnxqdm 服务器才返回所有学期（实测 50 条）。
+            // 传当前学期代码（如 202601）只会返回本学期的成绩 —— 开学初是 0 条。
+            val body = requestBody { api.scores(term = term.orEmpty(), page = page) }
             val parsed = JwJson.scores(body)
             throwIfAuthFailed(parsed.code, parsed.message)
 
