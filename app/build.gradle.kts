@@ -22,8 +22,8 @@ android {
         applicationId = "com.smu.pocket"
         minSdk = 26          // java.time 原生可用，省掉 desugar
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.1.1"
     }
 
     signingConfigs {

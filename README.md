@@ -10,7 +10,7 @@
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin&logoColor=white)
 ![Compose](https://img.shields.io/badge/Compose-Material3-4285F4?logo=jetpackcompose&logoColor=white)
 ![MinSdk](https://img.shields.io/badge/minSdk-26-blue)
-![Version](https://img.shields.io/badge/release-v1.1.0-success)
+![Version](https://img.shields.io/badge/release-v1.1.1-success)
 ![APK](https://img.shields.io/badge/APK-1.7%20MB-success)
 ![Tests](https://img.shields.io/badge/tests-66%20passed-brightgreen)
 
@@ -61,14 +61,19 @@
 
 ## 下载与安装
 
-从 [Releases](https://github.com/1812355417/smu-pocket/releases) 下载最新 `smu-pocket-v1.1.0.apk`，传到手机点击安装即可（需允许「未知来源」）。
+从 [Releases](https://github.com/1812355417/smu-pocket/releases) 下载最新 `smu-pocket-v1.1.1.apk`，传到手机点击安装即可（需允许「未知来源」）。
 
 - **从 debug 版升级**：debug 包和正式包签名不同，需要先卸载旧版（本地缓存会清空，登录态需重新扫码）
 - **正式包校验**：与 Release 页面附带的 SHA-256 比对，确认下载完整
 
 ```bash
-adb install -r smu-pocket-v1.1.0.apk
+adb install -r smu-pocket-v1.1.1.apk
 ```
+
+### 反馈与更新通知
+
+- **QQ 群：1128162850** —— 版本更新、教务接口变动会在这里通知；App 设置页点群号可一键复制
+- 也欢迎直接提 [Issue](https://github.com/1812355417/smu-pocket/issues)
 
 ---
 
@@ -284,6 +289,11 @@ val onlineExamNumber: String get() = xkh.trim().ifBlank { xid.trim() }
 ---
 
 ## 更新记录
+
+### v1.1.1（2026-11-03）
+
+- 设置页文案微调：「问题反馈 QQ 群」→「**更新通知 / 问题反馈 QQ 群**」（这个群同时用来发版本更新通知）
+- README 补充「反馈与更新通知」渠道，下载文件名同步到 v1.1.1
 
 ### v1.1.0（2026-11-03）
 

@@ -45,11 +45,11 @@ import com.smu.pocket.ui.components.CardBox
 import com.smu.pocket.ui.components.LabelValue
 import com.smu.pocket.ui.components.ScreenHeader
 
-/** 问题反馈 QQ 群。点一下复制到剪贴板 */
+/** 更新通知 / 问题反馈 QQ 群。点一下复制到剪贴板 */
 private const val QQ_GROUP = "1128162850"
 
 /** App 版本号。改版本时和 app/build.gradle.kts 的 versionName 一起改 */
-private const val APP_VERSION = "v1.1.0"
+private const val APP_VERSION = "v1.1.1"
 
 @Composable
 fun SettingsScreen(
@@ -178,7 +178,7 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "问题反馈 QQ 群：",
+                    text = "更新通知 / 问题反馈 QQ 群：",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
