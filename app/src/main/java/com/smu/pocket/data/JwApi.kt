@@ -49,6 +49,24 @@ interface JwApi {
         @Field("rows") rows: Int = 200,
     ): Response<ResponseBody>
 
+    /**
+     * 课程任务（考试）列表。`POST /new/student/xskcrw/skrwDatas`
+     *
+     * 用来拿**网考号**：响应 `rows[].xid` 就是网考号（抓包里有时叫 `xkh`，两个都兼容），
+     * 按 `rows[].kcmc`（课程名）对到「考试安排」里的那门课上。
+     * 实测返回 `{"data":"","rows":[...共17条...],"total":17}`，一页就够。
+     *
+     * 分页参数沿用成绩接口的形状（`page`/`rows`）：这类 `*Datas` 接口默认只给 20 行，
+     * 不翻页会**静默少数据**。`xnxqdm` 传当前学期，保证网考号和本学期的考试对得上。
+     */
+    @FormUrlEncoded
+    @POST("new/student/xskcrw/skrwDatas")
+    suspend fun examTasks(
+        @Field("xnxqdm") term: String = "",
+        @Field("page") page: Int = 1,
+        @Field("rows") rows: Int = 200,
+    ): Response<ResponseBody>
+
 
     companion object {
         fun create(retrofit: Retrofit): JwApi = retrofit.create(JwApi::class.java)

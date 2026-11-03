@@ -5,6 +5,7 @@ import com.smu.pocket.data.model.JwJson
 import com.smu.pocket.data.model.toCourse
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -221,5 +222,62 @@ class JwJsonTest {
             listOf("机能实验学二", "药理学", "药理学", "实验诊断学", "实验诊断学", "手术学基础", "临床诊断学"),
             courses.map { it.name },
         )
+    }
+
+    // ------------------------------------------------------------------
+    // 考试「网考号」（xskcrw/skrwDatas）
+    // ------------------------------------------------------------------
+
+    @Test
+    fun parsesExamTaskRowsWithOnlineExamNumber() {
+        // 真实响应形状（缩自 skrwDatas 实测）：网考号字段是 xid，`{"data":"","rows":[...],"total":17}`
+        val body = """
+            {"code":0,"message":"成功","data":"","total":2,"rows":[
+              {"xid":"7667619","kcmc":"形势与政策","khfsmc":"考试"},
+              {"xid":13621854,"kcmc":"药理学","khfsmc":"考试"}
+            ]}
+        """.trimIndent()
+
+        val resp = JwJson.examTasks(body)
+
+        assertEquals(0, resp.code)
+        assertTrue(resp.ok)
+        assertEquals(2, resp.rows.size)
+        assertEquals("7667619", resp.rows[0].onlineExamNumber)
+        // 同一个字段教务可能给数字（13621854），柔性序列化器要能吃
+        assertEquals("13621854", resp.rows[1].onlineExamNumber)
+        assertEquals("药理学", resp.rows[1].kcmc)
+        assertFalse("total 等于行数时不该再翻页", resp.hasMore)
+    }
+
+    @Test
+    fun onlineExamNumberPrefersXkhButFallsBackToXid() {
+        // 抓包时看到的是 xkh，真实响应里是 xid —— 两个都认，同时存在时 xkh 优先
+        val both = JwJson.examTasks("""{"code":0,"rows":[{"xkh":"111","xid":"222","kcmc":"A"}]}""")
+        assertEquals("111", both.rows[0].onlineExamNumber)
+
+        val onlyXid = JwJson.examTasks("""{"code":0,"rows":[{"xid":"222","kcmc":"A"}]}""")
+        assertEquals("222", onlyXid.rows[0].onlineExamNumber)
+
+        val neither = JwJson.examTasks("""{"code":0,"rows":[{"kcmc":"A"}]}""")
+        assertEquals("", neither.rows[0].onlineExamNumber)
+    }
+
+    @Test
+    fun examTaskRowsCanBeNestedUnderData() {
+        val resp = JwJson.examTasks("""{"code":0,"data":{"rows":[{"xkh":"1","kcmc":"A"}]}}""")
+
+        assertEquals(1, resp.rows.size)
+        assertEquals("A", resp.rows[0].kcmc)
+        assertEquals("1", resp.rows[0].xkh)
+    }
+
+    @Test
+    fun authErrorEnvelopeDoesNotCrashExamTasks() {
+        val resp = JwJson.examTasks("""{"code":-401,"data":"","message":"尚未登录，请先登录"}""")
+
+        assertEquals(-401, resp.code)
+        assertTrue(resp.rows.isEmpty())
+        assertTrue("不能假装成功", !resp.ok)
     }
 }

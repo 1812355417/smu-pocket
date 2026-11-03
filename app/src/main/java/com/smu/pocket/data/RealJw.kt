@@ -1,8 +1,8 @@
 ﻿package com.smu.pocket.data
 
 import com.smu.pocket.core.Course
+import com.smu.pocket.core.DefaultPeriods
 import com.smu.pocket.core.Grade
-import com.smu.pocket.core.Period
 import com.smu.pocket.core.Semester
 import com.smu.pocket.core.SessionExpiredException
 import com.smu.pocket.core.TermCode
@@ -42,6 +42,9 @@ class RealJw(
 
     /** 整学期总表缓存：bootstrap 时拉过一次，别重复请求 */
     private var termRows: List<CourseData>? = null
+
+    /** 网考号缓存：课程名 → 网考号（`xskcrw/skrwDatas`）。一次进程内只拉一次 */
+    private var examNumberCache: Map<String, String>? = null
 
     /** 解析出来的学期代码，进程内缓存，避免每次请求都解析一遍 */
     private var resolvedTerm: String? = null
@@ -86,6 +89,46 @@ class RealJw(
         return fetchAllWeeks().mapNotNull {
             it.toCourse(fallbackWeek = null, firstMonday = config.firstMonday)
         }
+    }
+
+    /**
+     * 考试网考号：课程名 → `xkh`。
+     *
+     * 这是**纯展示增强**：任何失败都退化成空表，「考试安排」照常只显示课名；
+     * 调用方 [com.smu.pocket.ui.AppViewModel] 外面还兜了一层 runCatching。
+     * 拿到就缓存，切周 / 重进页面不重复请求。
+     */
+    override suspend fun examNumbers(term: String?): Map<String, String> {
+        examNumberCache?.let { return it }
+
+        val targetTerm = term ?: this.term()
+        val collected = LinkedHashMap<String, String>()
+        var page = 1
+
+        while (page <= MAX_PAGES) {
+            val body = requestBody { api.examTasks(term = targetTerm, page = page) }
+            val parsed = JwJson.examTasks(body)
+            throwIfAuthFailed(parsed.code, parsed.message)
+            if (!parsed.ok) {
+                // 参数不对时这里是唯一线索（比如接口要 source / 其它过滤字段）
+                Log.w("RealJw", "skrwDatas code=${parsed.code} message=${parsed.message}")
+                break
+            }
+
+            parsed.rows.forEach { row ->
+                val name = row.kcmc?.trim().orEmpty()
+                // 真实字段是 xid，抓包里叫 xkh 的也兼容（见 ExamTaskData）
+                val number = row.onlineExamNumber
+                if (name.isNotEmpty() && number.isNotEmpty()) collected[name] = number
+            }
+
+            if (!parsed.hasMore) break
+            page++
+        }
+
+        // 一条都没拿到就先别缓存，下次进「今日」还能再试一次
+        if (collected.isNotEmpty()) examNumberCache = collected
+        return collected
     }
 
     override suspend fun grades(term: String?): List<Grade> {
@@ -161,7 +204,7 @@ class RealJw(
 
     private suspend fun configOf(firstMonday: LocalDate, totalWeeks: Int): TimetableConfig {
         val name = TermCode.displayName(term())
-        return TimetableConfig(name, firstMonday, totalWeeks, DEFAULT_PERIODS)
+        return TimetableConfig(name, firstMonday, totalWeeks, DefaultPeriods.ALL)
             .also { anchor = it }
     }
 
@@ -212,22 +255,5 @@ class RealJw(
          * 自举失败时用它，保证 UI 不会因为拿不到日期而崩。
          */
         private val FALLBACK_FIRST_MONDAY: LocalDate = LocalDate.of(2026, 8, 31)
-
-        /**
-         * 作息时间。教务没有接口给这个（`qssj`/`jssj` 是**每门课**的起止时刻，不是每节课的），
-         * 所以先给一份默认值，需要精确时按学校作息表改。
-         */
-        private val DEFAULT_PERIODS = listOf(
-            Period(1, "08:00", "08:45"),
-            Period(2, "08:55", "09:40"),
-            Period(3, "10:00", "10:45"),
-            Period(4, "10:55", "11:40"),
-            Period(5, "14:00", "14:45"),
-            Period(6, "14:55", "15:40"),
-            Period(7, "16:00", "16:45"),
-            Period(8, "16:55", "17:40"),
-            Period(9, "19:00", "19:45"),
-            Period(10, "19:55", "20:40"),
-        )
     }
 }

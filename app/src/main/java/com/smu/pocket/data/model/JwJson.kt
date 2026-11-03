@@ -86,4 +86,38 @@ object JwJson {
             total = total,
         )
     }
+
+    /**
+     * 课程任务（考试）解码。`POST /new/student/xskcrw/skrwDatas`
+     *
+     * 形态与成绩接口一致：`{ "data": "", "rows": [...], "total": 12 }`，
+     * 顺手兼容 `{ "data": { "rows": [...] } }` 和裸数组，免得教务换个包装就白屏。
+     */
+    fun examTasks(body: String): ExamTaskResponse {
+        val text = body.trimStart()
+
+        if (text.startsWith("[")) {
+            val rows = format.decodeFromString<List<ExamTaskData>>(text)
+            return ExamTaskResponse(rows = rows, total = rows.size)
+        }
+
+        val root = runCatching { format.parseToJsonElement(text) }.getOrNull() as? JsonObject
+            ?: return ExamTaskResponse()
+
+        val directRows = root["rows"] as? JsonArray
+        val nestedData = root["data"] as? JsonObject
+        val nestedRows = nestedData?.get("rows") as? JsonArray
+        val rowsJson = directRows ?: nestedRows ?: JsonArray(emptyList())
+
+        val total = (root["total"] as? JsonPrimitive)?.content?.toIntOrNull()
+            ?: (nestedData?.get("total") as? JsonPrimitive)?.content?.toIntOrNull()
+            ?: rowsJson.size
+
+        return ExamTaskResponse(
+            code = (root["code"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0,
+            message = (root["message"] as? JsonPrimitive)?.content.orEmpty(),
+            rows = format.decodeFromJsonElement(rowsJson),
+            total = total,
+        )
+    }
 }

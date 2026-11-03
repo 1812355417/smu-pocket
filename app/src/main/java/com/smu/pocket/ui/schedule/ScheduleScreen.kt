@@ -35,7 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.smu.pocket.core.Course
-import com.smu.pocket.core.TimetableConfig
+import com.smu.pocket.core.TOTAL_SECTIONS
 import com.smu.pocket.ui.UiState
 import com.smu.pocket.ui.components.EmptyHint
 import com.smu.pocket.ui.components.SelfStudyChip
@@ -100,7 +100,9 @@ fun ScheduleScreen(
             }
         } else {
             DayHeader()
-            TimetableGrid(state = state, config = config, modifier = Modifier.weight(1f))
+            // weight(1f) 把网格限制在「头部 / 周次条 / 底部翻周按钮」之间剩余的固定高度里，
+            // 超出 14 行的部分由网格内部自己滚 —— 不能让它按内容高度撑开，否则底部导航栏会被挤出屏幕
+            TimetableGrid(state = state, modifier = Modifier.weight(1f))
         }
 
         WeekNav(onPrev = onPrevWeek, onNext = onNextWeek)
@@ -160,29 +162,34 @@ private fun DayHeader() {
 }
 
 /**
- * 课表网格。
+ * 课表网格。**永远固定渲染 [TOTAL_SECTIONS]（14）行**，哪怕这一周 11~14 节完全没课：
+ * 行数不跟 `config.periods` 走，所以旧版本缓存（只有 10 条作息）也不会把晚课截掉；
+ * 没课的格子就是空白格。
  *
  * 每天一个独立的 Column：跨节课程渲染成 `span * CELL_HEIGHT` 高的色块，
  * 并跳过它覆盖的后续几节 —— 4 节课的课程是一整块，而不是「一格有色 + 三格空白」。
+ *
+ * 左侧节次列和 7 天网格在**同一个 Row** 里，所以只有一条 [verticalScroll]：
+ * 上下滑动时数字和色块始终对得齐。
  *
  * 颜色用教务自己给的 `bgcolor`（每门课一种），比统一配色更容易一眼分辨。
  */
 @Composable
 private fun TimetableGrid(
     state: UiState,
-    config: TimetableConfig,
     modifier: Modifier = Modifier,
 ) {
     val week = state.selectedWeek
     val courses = state.scheduleCourses.filter { it.occursIn(week) }
     val byDay = courses.groupBy { it.dayOfWeek }
-    val sections = config.periods.map { it.index }
+    val sections = (1..TOTAL_SECTIONS).toList()
 
     Row(
         modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState()),
     ) {
+        // 左列只显示纯数字 1..14，不显示具体时刻
         Column(Modifier.width(TIME_COL_WIDTH)) {
             sections.forEach { index ->
                 Box(

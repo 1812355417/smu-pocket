@@ -53,6 +53,15 @@ data class Period(val index: Int, val start: String, val end: String) {
 }
 
 /**
+ * 课表固定渲染的节次数：1..14。
+ *
+ * 晚课可能排到第 11~14 节，而 [TimetableConfig.periods] 可能是**旧版本缓存**里只有 10 条的数据。
+ * 所以布局不跟配置走：永远画满 14 行，没有课的格子留空 ——
+ * 否则「配置里没有 11~14 节」会让这些课整块消失在网格外。
+ */
+const val TOTAL_SECTIONS: Int = 14
+
+/**
  * 课表渲染所需的元信息。
  * [firstMonday] 由「第 1 周查询的 qsrq」反推；[periods] 接口不给，用默认值。
  */

@@ -151,11 +151,14 @@ private fun List<Course>.toCacheCourses(): List<CachedCourse> = map {
 fun CachedSnapshot.toConfig(): TimetableConfig? {
     val c = config ?: return null
     val monday = runCatching { LocalDate.parse(c.firstMonday) }.getOrNull() ?: return null
+    val cached = c.periods.map { Period(it.index, it.start, it.end) }
     return TimetableConfig(
         termName = c.termName,
         firstMonday = monday,
         totalWeeks = c.totalWeeks,
-        periods = c.periods.map { Period(it.index, it.start, it.end) },
+        // 旧版本缓存里作息只有 10 节：缺 11~14 节就用默认表补齐，
+        // 否则升级后不清缓存，「今日」页的晚课仍然查不到时刻
+        periods = if (cached.size >= TOTAL_SECTIONS) cached else DefaultPeriods.ALL,
     )
 }
 

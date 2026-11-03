@@ -11,20 +11,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.smu.pocket.core.Course
+import com.smu.pocket.core.Period
+import com.smu.pocket.core.TimetableConfig
 import com.smu.pocket.ui.UiState
 import com.smu.pocket.ui.components.CardBox
 import com.smu.pocket.ui.components.SelfStudyChip
@@ -77,7 +84,7 @@ fun TodayScreen(
                     if (index > 0) {
                         Spacer(Modifier.height(10.dp))
                     }
-                    CourseRow(course)
+                    CourseRow(course, state.config)
                 }
             }
         }
@@ -115,7 +122,7 @@ fun TodayScreen(
 
                 else -> state.tomorrowCourses.forEachIndexed { index, course ->
                     if (index > 0) Spacer(Modifier.height(10.dp))
-                    CourseRow(course)
+                    CourseRow(course, state.config)
                 }
             }
         }
@@ -140,22 +147,50 @@ fun TodayScreen(
 
         // ---- 考试安排 ----
         CardBox {
-            Text(
-                text = "考试安排",
-                style = MaterialTheme.typography.titleSmall,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "考试安排",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f),
+                )
+                if (state.examNumbersReady && state.upcomingExams.isNotEmpty()) {
+                    Text(
+                        text = "共 ${state.upcomingExams.size} 场",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             Spacer(Modifier.height(6.dp))
 
-            if (state.upcomingExams.isEmpty()) {
-                Text(
+            when {
+                // 网考号还没回来：整张考试列表先别画。
+                // 否则列表先渲染、号码过一秒再「跳」出来，看着像闪烁/卡顿。
+                !state.examNumbersReady -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "正在加载考试安排…",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                state.upcomingExams.isEmpty() -> Text(
                     text = "近期暂无考试安排",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            } else {
-                state.upcomingExams.take(6).forEachIndexed { index, exam ->
+
+                // 全部显示，**不截断**：之前这里写死了 take(6)，
+                // 第 7 场之后的考试（正好是 1 月那几场）被裁掉，看着像「只到 12 月」
+                else -> state.upcomingExams.forEachIndexed { index, exam ->
                     if (index > 0) Spacer(Modifier.height(10.dp))
-                    ExamRow(exam)
+                    ExamRow(exam, state.examNumbers)
                 }
             }
         }
@@ -183,8 +218,12 @@ fun TodayScreen(
 
 
 @Composable
-private fun ExamRow(exam: Course) {
+private fun ExamRow(exam: Course, examNumbers: Map<String, String>) {
     val date = exam.date ?: return
+    // 课程名 -> 网考号；没有就只显示课名，不留空括号
+    // （课名两边偶尔带空格，精确匹配不上时再用 trim 过的试一次）
+    val examNo = (examNumbers[exam.name] ?: examNumbers[exam.name.trim()])
+        ?.takeIf { it.isNotBlank() }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.width(72.dp)) {
@@ -201,8 +240,27 @@ private fun ExamRow(exam: Course) {
         }
 
         Column(Modifier.weight(1f)) {
+            // 网考号不强调：颜色/字号跟下面「地点 · 时间」那行保持一致（灰色小字）
+            val secondaryColor = MaterialTheme.colorScheme.onSurfaceVariant
+            val secondarySize = MaterialTheme.typography.labelSmall.fontSize
+            // 用 AnnotatedString 而不是并排两个 Text：课名很长时会自然换行，
+            // 号码跟着课名一起折行，不会把课名挤成省略号
             Text(
-                text = exam.name,
+                text = buildAnnotatedString {
+                    append(exam.name)
+                    examNo?.let {
+                        withStyle(
+                            SpanStyle(
+                                color = secondaryColor,
+                                fontSize = secondarySize,
+                                // 课名是 Medium，这里必须显式 Normal，否则会继承成粗体
+                                fontWeight = FontWeight.Normal,
+                            ),
+                        ) {
+                            append(" [网考号：$it]")
+                        }
+                    }
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
             )
@@ -222,18 +280,28 @@ private fun ExamRow(exam: Course) {
 }
 
 @Composable
-private fun CourseRow(course: Course) {
+private fun CourseRow(course: Course, config: TimetableConfig?) {
+    // 时间轴：优先用教务给的 qssj/jssj（最准），拿不到就退回本地作息表（含 11~14 节），
+    // 再退到「第 N 节」。三层兜底，晚课不会因为缺时刻而显示成空白。
+    val label = course.timeLabel
+    val startText = label?.substringBefore("-")?.takeIf { it.isNotBlank() }
+        ?: periodAt(config, course.startSection)?.start
+        ?: "第${course.startSection}节"
+    val endText = label?.substringAfter("-", "")?.ifBlank { null }
+        ?: periodAt(config, course.endSection)?.end
+        ?: "第${course.endSection}节"
+
     Row(verticalAlignment = Alignment.Top) {
         Column(Modifier.width(64.dp)) {
             Text(
-                text = course.timeLabel?.substringBefore("-") ?: "第${course.startSection}节",
+                text = startText,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = course.timeLabel?.substringAfter("-", "")?.ifBlank { null } ?: "第${course.endSection}节",
+                text = endText,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -321,6 +389,10 @@ private fun WeekBars(counts: List<Int>, todayIndex: Int) {
         }
     }
 }
+
+/** 本地作息表查一节的时间；11~14 节也在表里，所以晚课同样能查到 */
+private fun periodAt(config: TimetableConfig?, section: Int): Period? =
+    config?.periods?.firstOrNull { it.index == section }
 
 /** 教务把 12 个老师的名字拼在一个字段里，卡片上只显示前 3 个 */
 private fun shortTeachers(raw: String?): String? {

@@ -1,6 +1,5 @@
 ﻿package com.smu.pocket.ui
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.smu.pocket.core.CacheStore
@@ -21,11 +20,16 @@ import com.smu.pocket.data.JwService
 import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+
+/** 网考号最多等多久：超时就当没有，不能让「考试安排」一直转圈 */
+private const val EXAM_NUMBERS_TIMEOUT_MS = 5_000L
 
 /**
  * 全局状态。单一 ViewModel + StateFlow。
@@ -48,6 +52,20 @@ data class UiState(
     val currentCoursesWeek: Int = 0,
     /** 整学期课表（含考试安排），供「近期考试」使用 */
     val termCourses: List<Course> = emptyList(),
+    /**
+     * 考试「网考号」：课程名 → 网考号（`xskcrw/skrwDatas` 的 `xkh`）。
+     *
+     * 只放内存、不落缓存：号码跟着学期/会话变，缓存旧号反而会误导。
+     * 拉不到就是空表，考试安排照常显示课名。
+     */
+    val examNumbers: Map<String, String> = emptyMap(),
+    /**
+     * 网考号是否「已就绪」（请求成功、失败、或没有会话压根不会去请求，都算就绪）。
+     *
+     * false 时「考试安排」先显示 Loading，等 [examNumbers] 和考试列表**一起**渲染 ——
+     * 否则列表先出现、号码过一秒再「跳」出来，看着像闪烁。
+     */
+    val examNumbersReady: Boolean = false,
     /** 成绩是否成功拉取过（失败时不要把缓存里的成绩覆盖成空） */
     val gradesLoaded: Boolean = false,
 
@@ -217,6 +235,9 @@ class AppViewModel(
                 selectedWeek = snapshot.week,
                 currentWeek = current,
                 cachedAt = snapshot.savedAt,
+                // 有会话 → 马上会去刷新，考试列表先等号码一起出来；
+                // 没会话（离线看缓存）→ 号码永远不会来，直接放行，别让列表一直转圈
+                examNumbersReady = !session.isLoggedIn(),
             )
         }
         return true
@@ -293,7 +314,15 @@ class AppViewModel(
                 return@launch
             }
 
-            _state.update { it.copy(loading = true, error = null) }
+            _state.update {
+                it.copy(
+                    loading = true,
+                    error = null,
+                    // 有号码就继续显示（刷新时不能把已有列表藏起来，那是另一种闪烁）；
+                    // 没号码就等这一轮拉回来，和考试列表一起渲染
+                    examNumbersReady = it.examNumbers.isNotEmpty(),
+                )
+            }
 
             try {
                 val config = jw.timetableConfig()
@@ -349,9 +378,33 @@ class AppViewModel(
                         loading = false,
                         stale = hasData,
                         error = if (hasData) null else (e.message ?: "加载失败"),
+                        // 这一轮不会再有号码了，放行考试列表，别一直转圈
+                        examNumbersReady = true,
                     )
                 }
                 return@launch
+            }
+
+            // 网考号：**和考试安排一起就位**。先并发发起，等 termCourses 也拿到后一次性更新，
+            // 否则考试列表先渲染、号码过一秒再「跳」出来（实测 ~1s，很像闪烁）。
+            // 加超时兜底：号码拉不到就当没有，绝不能因为它让考试名单一直转圈。
+            val examNumbersJob = async {
+                withTimeoutOrNull(EXAM_NUMBERS_TIMEOUT_MS) {
+                    runCatching { jw.examNumbers() }.getOrNull().orEmpty()
+                }.orEmpty()
+            }
+
+            // 考试列表和号码在同一帧出现；成绩慢的话不等它，先让「考试安排」稳定下来
+            val term = runCatching { jw.termCourses() }.getOrNull()
+            val numbers = examNumbersJob.await()
+
+            _state.update {
+                it.copy(
+                    // termCourses 失败时保留上一份，不能把考试列表清空
+                    termCourses = term ?: it.termCourses,
+                    examNumbers = if (numbers.isNotEmpty()) numbers else it.examNumbers,
+                    examNumbersReady = true,
+                )
             }
 
             try {
@@ -359,13 +412,6 @@ class AppViewModel(
                 _state.update { it.copy(grades = g, gradesLoaded = true) }
             } catch (e: Exception) {
                 // 成绩失败不影响课表
-            }
-
-            try {
-                val term = jw.termCourses()
-                _state.update { it.copy(termCourses = term) }
-            } catch (e: Exception) {
-                // 考试取不到不影响其它内容
             }
 
             persistCache()
@@ -392,6 +438,8 @@ class AppViewModel(
                 stale = hasData,
                 loggedIn = hasData || it.loggedIn,
                 error = if (hasData) null else e.message,
+                // 会话已失效，这一轮不会再拿到号码；考试列表照常显示（只是没有号码）
+                examNumbersReady = true,
             )
         }
         if (!hasData) {

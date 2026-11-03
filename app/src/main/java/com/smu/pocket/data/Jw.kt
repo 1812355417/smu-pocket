@@ -1,8 +1,8 @@
 ﻿package com.smu.pocket.data
 
 import com.smu.pocket.core.Course
+import com.smu.pocket.core.DefaultPeriods
 import com.smu.pocket.core.Grade
-import com.smu.pocket.core.Period
 import com.smu.pocket.core.TimetableConfig
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -48,6 +48,14 @@ interface JwService {
      */
     suspend fun termCourses(): List<Course> = emptyList()
 
+    /**
+     * 考试「网考号」：**课程名 → 网考号**（`xskcrw/skrwDatas` 响应里的 `xid`，兼容 `xkh`）。
+     *
+     * 纯展示增强：拿不到就返回空表，「考试安排」照常只显示课名。
+     * 真实实现内部有内存缓存，切周 / 重进页面不会重复请求。
+     */
+    suspend fun examNumbers(term: String? = null): Map<String, String> = emptyMap()
+
     /** 当前使用的学期代码（如 "202601"）。演示实现返回 null。 */
     suspend fun semesterCode(): String? = null
 
@@ -71,7 +79,7 @@ class FakeJw : JwService {
             termName = "2025-2026 学年第二学期（演示）",
             firstMonday = monday.minusWeeks(5),
             totalWeeks = 20,
-            periods = demoPeriods,
+            periods = DefaultPeriods.ALL,
         )
     }
 
@@ -81,20 +89,13 @@ class FakeJw : JwService {
 
     override suspend fun termCourses(): List<Course> = demoCourses + demoExams
 
-    private companion object {
+    /** 演示用网考号：和 [demoExams] 的课名对上，方便截图看效果 */
+    override suspend fun examNumbers(term: String?): Map<String, String> = mapOf(
+        "药理学" to "7667619",
+        "临床诊断学" to "7667621",
+    )
 
-        val demoPeriods = listOf(
-            Period(1, "08:00", "08:45"),
-            Period(2, "08:55", "09:40"),
-            Period(3, "10:00", "10:45"),
-            Period(4, "10:55", "11:40"),
-            Period(5, "14:00", "14:45"),
-            Period(6, "14:55", "15:40"),
-            Period(7, "16:00", "16:45"),
-            Period(8, "16:55", "17:40"),
-            Period(9, "19:00", "19:45"),
-            Period(10, "19:55", "20:40"),
-        )
+    private companion object {
 
         val allWeeks: Set<Int> = (1..16).toSet()
         val oddWeeks: Set<Int> = (1..16).filter { it % 2 == 1 }.toSet()
@@ -142,6 +143,21 @@ class FakeJw : JwService {
                 id = "c9", name = "医学统计学", teacher = "郑老师",
                 dayOfWeek = 1, startSection = 5, endSection = 6, weeks = allWeeks,
                 content = "自主学习：SPSS 上机练习", isSelfStudy = true,
+            ),
+            // 晚课：专门用来验证 11~14 节能不能正常显示（第 11 节 20:15 开始）
+            Course(
+                id = "c10", name = "马克思主义基本原理", teacher = "吴老师", room = "教学馆 101",
+                dayOfWeek = 2, startSection = 11, endSection = 12, weeks = allWeeks,
+                content = "专题讨论",
+            ),
+            Course(
+                id = "c11", name = "医学文献检索", teacher = "何老师", room = "图书馆 401",
+                dayOfWeek = 4, startSection = 11, endSection = 12, weeks = allWeeks,
+            ),
+            Course(
+                id = "c12", name = "临床技能训练", teacher = "林老师", room = "临床技能中心",
+                dayOfWeek = 6, startSection = 13, endSection = 14, weeks = oddWeeks,
+                content = "夜间开放练习",
             ),
         )
 
