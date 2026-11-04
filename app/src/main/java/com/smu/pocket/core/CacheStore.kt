@@ -1,4 +1,4 @@
-﻿package com.smu.pocket.core
+package com.smu.pocket.core
 
 import android.content.Context
 import kotlinx.serialization.Serializable
@@ -9,7 +9,7 @@ import java.io.File
 import java.time.LocalDate
 
 /**
- * 本地缓存：把最后一次成功拿到的**课表 + 成绩**存成 JSON。
+ * 本地缓存：把最后一次成功拿到的**课表 + 成绩**序列化后加密保存。
  *
  * 注意这里有**两份课表**：
  * - [CachedSnapshot.courses]：课表页当时选中的那一周
@@ -76,7 +76,11 @@ data class CachedSnapshot(
 
 class CacheStore(context: Context) {
 
-    private val file = File(context.filesDir, "cache_snapshot.json")
+    private val storage = EncryptedStore(context, "snapshot")
+    init {
+        val legacy = File(context.filesDir, "cache_snapshot.json")
+        check(!legacy.exists() || legacy.delete()) { "Cannot remove legacy private cache" }
+    }
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -84,17 +88,18 @@ class CacheStore(context: Context) {
     }
 
     fun load(): CachedSnapshot? {
-        if (!file.exists()) return null
+        val encrypted = storage.read() ?: return null
         return try {
-            json.decodeFromString<CachedSnapshot>(file.readText())
+            json.decodeFromString<CachedSnapshot>(encrypted)
         } catch (e: Exception) {
+            storage.clear()
             null
         }
     }
 
     fun save(snapshot: CachedSnapshot) {
         try {
-            file.writeText(json.encodeToString(snapshot))
+            storage.write(json.encodeToString(snapshot))
         } catch (e: Exception) {
             // 写失败不影响主流程
         }
@@ -102,7 +107,7 @@ class CacheStore(context: Context) {
 
     fun clear() {
         try {
-            file.delete()
+            storage.clear()
         } catch (e: Exception) {
             // ignore
         }

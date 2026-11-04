@@ -1,6 +1,7 @@
 package com.smu.pocket.core
 
 import android.webkit.CookieManager
+import android.webkit.WebStorage
 import java.net.URI
 
 /**
@@ -15,13 +16,14 @@ import java.net.URI
  *    `cas.xxx.edu.cn` 和 `zhjw.xxx.edu.cn` 各有一份，必须按 host 分别存，
  *    否则你只捞到了 CAS 的那份，回去请求教务就是未登录。
  *
- * 3. **捞之前要 flush()**。CookieManager 落盘是异步的，刚 Set-Cookie 完立刻
- *    getCookie 有可能拿到旧值（Android 5/6 尤其明显）。
+ * 3. 不主动 flush 登录 Cookie；交接完成/退出后清理 WebView 副本。
  */
 object CookieHarvester {
 
-    fun flush() {
-        CookieManager.getInstance().flush()
+    fun clearWebLoginData() {
+        WebStorage.getInstance().deleteAllData()
+        val manager = CookieManager.getInstance()
+        manager.removeAllCookies { manager.flush() }
     }
 
     /**
@@ -30,7 +32,6 @@ object CookieHarvester {
      */
     fun harvest(vararg urls: String): List<Pair<String, String>> {
         if (urls.isEmpty()) return emptyList()
-        flush()
 
         val manager = CookieManager.getInstance()
         val byHost = LinkedHashMap<String, String>()

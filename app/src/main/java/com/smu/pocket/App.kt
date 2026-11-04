@@ -1,4 +1,4 @@
-﻿package com.smu.pocket
+package com.smu.pocket
 
 import android.app.Application
 import com.smu.pocket.core.CacheStore
@@ -20,6 +20,7 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.smu.pocket.core.CookieHarvester.clearWebLoginData()
         container = AppContainer(this)
     }
 }
