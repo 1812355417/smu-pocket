@@ -1,4 +1,4 @@
-﻿package com.smu.pocket.ui.components
+package com.smu.pocket.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
@@ -25,8 +25,8 @@ private val SelfStudyGreen = Color(0xFF2E7D32)
  */
 @Composable
 fun SelfStudyChip(
-    compact: Boolean = false,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
     Text(
         text = if (compact) "自主" else "自主学习",
