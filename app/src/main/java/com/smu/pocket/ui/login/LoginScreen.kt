@@ -157,8 +157,12 @@ private fun LoginWeb(
             webView?.let { w ->
                 w.stopLoading()
                 w.loadUrl("about:blank")
+                w.clearCache(true)
+                w.clearHistory()
+                w.clearFormData()
                 w.destroy()
             }
+            CookieHarvester.clearWebLoginData()
             webView = null
         }
     }
@@ -178,9 +182,13 @@ private fun LoginWeb(
                 continue
             }
 
-            harvested.forEach { (host, header) ->
-                Log.d(TAG, "捞到 cookie host=$host len=${header.length}")
-                onCookieHarvested(host, header)
+            val saved = runCatching {
+                harvested.forEach { (host, header) -> onCookieHarvested(host, header) }
+            }.isSuccess
+            if (!saved) {
+                CookieHarvester.clearWebLoginData()
+                hint = "无法安全保存登录凭据，请关闭后重试"
+                return@LaunchedEffect
             }
 
             val ok = runCatching { verifySession() }.getOrDefault(false)
@@ -226,9 +234,10 @@ private fun LoginWeb(
                 WebView(ctx).apply {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
-                    settings.databaseEnabled = true
+                    settings.databaseEnabled = false
+                    settings.cacheMode = WebSettings.LOAD_NO_CACHE
                     settings.loadsImagesAutomatically = true
-                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
 
                     val cookies = CookieManager.getInstance()
                     cookies.setAcceptCookie(true)
@@ -238,7 +247,7 @@ private fun LoginWeb(
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                             currentUrl = url
-                            Log.d(TAG, "onPageStarted: $url")
+                            Log.d(TAG, "onPageStarted")
                         }
 
                         // SPA / history.pushState 也能抓到，比 onPageFinished 可靠
@@ -248,8 +257,7 @@ private fun LoginWeb(
 
                         override fun onPageFinished(view: WebView, url: String) {
                             currentUrl = url
-                            CookieHarvester.flush()
-                            Log.d(TAG, "onPageFinished: $url")
+                            Log.d(TAG, "onPageFinished")
                         }
                     }
 

@@ -64,8 +64,7 @@ object Semester {
             }
             if (from <= 0 || to < from) continue
 
-            for (w in from..to) {
-                if (w > totalWeeks) continue
+            for (w in from..minOf(to, totalWeeks)) {
                 if (oddOnly && w % 2 == 0) continue
                 if (evenOnly && w % 2 != 0) continue
                 out += w

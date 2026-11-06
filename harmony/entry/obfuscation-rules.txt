@@ -1,0 +1,2 @@
+# Obfuscation rules (disabled by default, see build-profile.json5)
+-keep-property-name

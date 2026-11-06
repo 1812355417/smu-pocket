@@ -21,6 +21,7 @@ import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -506,6 +507,8 @@ class AppViewModel(
     }
 
     fun logout() {
+        viewModelScope.coroutineContext.cancelChildren()
+        com.smu.pocket.core.CookieHarvester.clearWebLoginData()
         weekJob?.cancel()
         session.clear()
         cache.clear()

@@ -22,8 +22,8 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun ScreenHeader(
     title: String,
-    subtitle: String? = null,
     modifier: Modifier = Modifier,
+    subtitle: String? = null,
 ) {
     Column(
         modifier

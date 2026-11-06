@@ -32,3 +32,12 @@ captures/
 # ===== 日志 =====
 *.log
 build-*.log
+# Apple generated projects and local build/signing state
+**/.build/
+**/.swiftpm/
+apple/*.xcodeproj/
+DerivedData/
+*.xcuserstate
+*.xcuserdatad/
+*.mobileprovision
+*.p12

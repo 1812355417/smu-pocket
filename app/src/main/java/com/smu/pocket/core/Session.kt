@@ -1,6 +1,9 @@
 package com.smu.pocket.core
 
 import android.content.Context
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
@@ -12,14 +15,25 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
  *   我们只接管登录成功后的 cookie。这样验证码、密码前端加密、CAS 多跳、
  *   微信扫码全部免费获得。
  * - 按 host 分别存，教务和电费互不干扰。
- * - P1 用普通 SharedPreferences；P2 接真实 cookie 后换成
- *   EncryptedSharedPreferences（androidx.security.crypto），对外接口不变。
+ * - Cookie 只通过 Keystore + AES-GCM 加密保存，不保存旧版明文。
  */
 class SessionStore(context: Context) {
 
-    private val prefs = context.getSharedPreferences(PREF, Context.MODE_PRIVATE)
+    private val storage = EncryptedStore(context, "session")
+    init {
+        check(context.getSharedPreferences("smu_session", Context.MODE_PRIVATE).edit().clear().commit())
+        check(context.deleteSharedPreferences("smu_session"))
+    }
     private val lock = Any()
-    private val cache = mutableMapOf<String, MutableMap<String, String>>()
+    private val cache: MutableMap<String, MutableMap<String, String>> = try {
+        storage.read()?.let { Json.decodeFromString<Map<String, Map<String, String>>>(it) }
+            ?.mapValues { it.value.toMutableMap() }?.toMutableMap() ?: mutableMapOf()
+    } catch (e: Exception) {
+        storage.clear()
+        mutableMapOf()
+    }
+
+    private var acceptingResponses = cache.values.any { it.isNotEmpty() }
 
     /** 拼成 OkHttp 的 Cookie 请求头 */
     fun cookieHeader(url: String): String {
@@ -38,9 +52,10 @@ class SessionStore(context: Context) {
     fun saveCookies(host: String, cookies: List<Cookie>) {
         if (cookies.isEmpty()) return
         synchronized(lock) {
+            if (!acceptingResponses) return
             val t = table(host)
             cookies.forEach { t[it.name] = it.value }
-            persist(host, t)
+            persist()
         }
     }
 
@@ -49,45 +64,39 @@ class SessionStore(context: Context) {
         val host = url.toHttpUrlOrNull()?.host ?: return
         if (header.isBlank()) return
         synchronized(lock) {
+            acceptingResponses = true
             val t = table(host)
             header.split(';').forEach { pair ->
                 val i = pair.indexOf('=')
                 if (i > 0) t[pair.substring(0, i).trim()] = pair.substring(i + 1).trim()
             }
-            persist(host, t)
+            persist()
         }
     }
 
     fun isLoggedIn(): Boolean {
-        val keys = synchronized(lock) { prefs.all.keys.toList() }
-        return keys.any { it.startsWith(KEY_PREFIX) }
+        return synchronized(lock) { cache.values.any { it.isNotEmpty() } }
     }
 
     fun clear() {
         synchronized(lock) {
+            acceptingResponses = false
             cache.clear()
-            prefs.edit().clear().apply()
+            storage.clear()
         }
     }
 
-    // 下面三个必须在 lock 内调用
-    private fun table(host: String): MutableMap<String, String> = cache.getOrPut(host) {
-        val raw = prefs.getString(KEY_PREFIX + host, "").orEmpty()
-        val t = linkedMapOf<String, String>()
-        raw.split(';').forEach { pair ->
-            val i = pair.indexOf('=')
-            if (i > 0) t[pair.substring(0, i).trim()] = pair.substring(i + 1).trim()
+    private fun table(host: String): MutableMap<String, String> =
+        cache.getOrPut(host) { linkedMapOf() }
+
+    private fun persist() {
+        try {
+            storage.write(Json.encodeToString(cache.mapValues { it.value.toMap() }))
+        } catch (e: Exception) {
+            acceptingResponses = false
+            cache.clear()
+            storage.clear()
+            throw e
         }
-        t
-    }
-
-    private fun persist(host: String, t: Map<String, String>) {
-        val raw = t.entries.joinToString("; ") { "${it.key}=${it.value}" }
-        prefs.edit().putString(KEY_PREFIX + host, raw).apply()
-    }
-
-    private companion object {
-        const val PREF = "smu_session"
-        const val KEY_PREFIX = "h_"
     }
 }

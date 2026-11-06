@@ -1,4 +1,4 @@
-﻿package com.smu.pocket.data
+package com.smu.pocket.data
 
 import com.smu.pocket.core.Course
 import com.smu.pocket.core.DefaultPeriods
@@ -12,7 +12,7 @@ import com.smu.pocket.data.model.CourseData
 import com.smu.pocket.data.model.JwJson
 import com.smu.pocket.data.model.toCourse
 import com.smu.pocket.data.model.toGrades
-import android.util.Log
+import kotlinx.coroutines.CancellationException
 import java.io.IOException
 import java.time.LocalDate
 import okhttp3.ResponseBody
@@ -102,28 +102,17 @@ class RealJw(
         examNumberCache?.let { return it }
 
         val targetTerm = term ?: this.term()
-        val collected = LinkedHashMap<String, String>()
-        var page = 1
-
-        while (page <= MAX_PAGES) {
-            val body = requestBody { api.examTasks(term = targetTerm, page = page) }
-            val parsed = JwJson.examTasks(body)
+        val rows = collectPages { page ->
+            val parsed = JwJson.examTasks(requestBody { api.examTasks(term = targetTerm, page = page) })
             throwIfAuthFailed(parsed.code, parsed.message)
-            if (!parsed.ok) {
-                // 参数不对时这里是唯一线索（比如接口要 source / 其它过滤字段）
-                Log.w("RealJw", "skrwDatas code=${parsed.code} message=${parsed.message}")
-                break
-            }
-
-            parsed.rows.forEach { row ->
-                val name = row.kcmc?.trim().orEmpty()
-                // 真实字段是 xid，抓包里叫 xkh 的也兼容（见 ExamTaskData）
-                val number = row.onlineExamNumber
-                if (name.isNotEmpty() && number.isNotEmpty()) collected[name] = number
-            }
-
-            if (!parsed.hasMore) break
-            page++
+            if (!parsed.ok) throw IOException("教务返回 code=${parsed.code}")
+            Page(parsed.rows, parsed.total)
+        }
+        val collected = LinkedHashMap<String, String>()
+        rows.forEach { row ->
+            val name = row.kcmc?.trim().orEmpty()
+            val number = row.onlineExamNumber
+            if (name.isNotEmpty() && number.isNotEmpty()) collected[name] = number
         }
 
         // 一条都没拿到就先别缓存，下次进「今日」还能再试一次
@@ -132,23 +121,13 @@ class RealJw(
     }
 
     override suspend fun grades(term: String?): List<Grade> {
-        val collected = mutableListOf<Grade>()
-        var page = 1
-
-        // 实测 rows=200 时 total=50、一次拿全；保留循环以防以后成绩变多
-        while (page <= MAX_PAGES) {
-            // 成绩要查**全部学期**：传空 xnxqdm 服务器才返回所有学期（实测 50 条）。
-            // 传当前学期代码（如 202601）只会返回本学期的成绩 —— 开学初是 0 条。
-            val body = requestBody { api.scores(term = term.orEmpty(), page = page) }
-            val parsed = JwJson.scores(body)
+        // 空学期查询全部成绩。分页完成后才映射和发布，避免静默保存半份数据。
+        return collectPages { page ->
+            val parsed = JwJson.scores(requestBody { api.scores(term = term.orEmpty(), page = page) })
             throwIfAuthFailed(parsed.code, parsed.message)
-
-            collected += parsed.rows.toGrades()
-            if (parsed.rows.isEmpty() || !parsed.hasMore) break
-            page++
-        }
-
-        return collected
+            if (parsed.code != 0) throw IOException("教务返回 code=${parsed.code}")
+            Page(parsed.rows, parsed.total)
+        }.toGrades()
     }
 
     /**
@@ -169,14 +148,14 @@ class RealJw(
 
         manualFirstMonday?.let { return configOf(it, DEFAULT_TOTAL_WEEKS) }
 
-        val firstMonday = try {
-            deriveFirstMonday()
-        } catch (e: Exception) {
-            null
-        } ?: FALLBACK_FIRST_MONDAY
+        val firstMonday = deriveFirstMonday() ?: throw IOException("无法从教务课表推算第一周周一，请稍后重试")
 
         val totalWeeks = try {
             deriveTotalWeeks()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SessionExpiredException) {
+            throw e
         } catch (e: Exception) {
             DEFAULT_TOTAL_WEEKS
         }
@@ -190,10 +169,7 @@ class RealJw(
      * 实测 10 条记录一致指向 2026-08-31。
      */
     private suspend fun deriveFirstMonday(): LocalDate? {
-        val mondays = fetchWeek(1).mapNotNull { row ->
-            TimeUtils.parseDate(row.qsrq)?.minusDays((row.xq - 1).toLong())
-        }
-        return mondays.minOrNull()
+        return TimeUtils.inferFirstMonday(fetchWeek(1), queriedWeek = 1)
     }
 
     /** `zc` 传空 → 整学期总表 → 所有周次串里的最大周次就是总周数 */
@@ -245,15 +221,8 @@ class RealJw(
 
     companion object {
 
-        private const val MAX_PAGES = 20
         private const val MIN_WEEKS = 16
         private const val MAX_WEEKS = 30
         private const val DEFAULT_TOTAL_WEEKS = 20
-
-        /**
-         * 兜底学期起始日：202601 学期第 1 周周一（由 `zc=1` 的 10 条真实记录反推得出）。
-         * 自举失败时用它，保证 UI 不会因为拿不到日期而崩。
-         */
-        private val FALLBACK_FIRST_MONDAY: LocalDate = LocalDate.of(2026, 8, 31)
     }
 }
