@@ -27,39 +27,41 @@
 | `ets/schedulecard/pages/ScheduleCard.ets`（新增） | 卡片 UI，按卡片尺寸切换 2x2 / 2x4 布局 |
 | `ets/core/WidgetSnapshot.ets`（新增） | 卡片专用快照读写：纯 JSON 文件存应用沙箱，**不加密**（课程名非敏感信息；卡片进程访问 HUKS 密钥有风险，刻意避开 EncryptedStore） |
 | `ets/viewmodel/AppViewModel.ets`（改） | `persistCache()` 与 `restoreFromCache()` 成功后调 `WidgetSnapshot.write()`，并遍历已注册 formId 调 `formProvider.updateForm()` |
+| `ets/entryability/EntryAbility.ets`（改） | `onCreate` / `onNewWant` 解析卡片 router 事件带来的 want 参数，通知 RootView 切到「今日」页 |
 | `entry/src/main/module.json5`（改） | 注册 FormExtensionAbility |
-| `resources/base/profile/form_config.json`（新增） | 卡片配置：`supportDimensions: [2x2, 2x4]`、`scheduledUpdateTime: "00:30"`、`updateDuration: 1`（30 分钟兜底刷新） |
+| `resources/base/profile/form_config.json`（新增） | 卡片配置：`supportDimensions: ["2*2", "2*4"]`、`updateDuration: 1`（30 分钟周期刷新，由 `onUpdateForm` 重算当天课程，跨午夜切换也由此覆盖，不再设 `scheduledUpdateTime`） |
 
 ### 快照内容
 
-存**当前周一整周的课 + 学期元信息**，而不是只存「今天的课」：
+存**整学期全部课程（含每周 weeks 模式）+ 学期元信息**，而不是只存「今天的课」或「当前周」：
 
 ```json
 {
   "version": 1,
   "savedAt": 1730000000000,
   "termName": "2025-2026-1",
-  "firstMonday": "2026-09-01",
+  "firstMonday": "2026-08-31",
   "totalWeeks": 18,
-  "currentWeek": 8,
   "themePrimary": "#0A59F7",
   "courses": [
     { "name": "...", "room": "...", "dayOfWeek": 1, "startSection": 1, "endSection": 2,
-      "weeks": [8], "timeLabel": "08:30-10:00", "colorHex": "#1f86c7", "isSelfStudy": false }
+      "weeks": [1, 2, 3], "timeLabel": "08:30-10:00", "colorHex": "#1f86c7", "isSelfStudy": false }
   ]
 }
 ```
 
-这样卡片进程在午夜跨天时可自行按 `firstMonday` 重算「今天是第几周、今天上哪些课」，不依赖 App 被打开。`themePrimary` 让卡片标题强调色跟随功能二的主题色。
+这样卡片进程在午夜跨天、甚至跨周时都能按 `firstMonday` + `weeks` 自行算出「今天是第几周、今天上哪些课」，完全不依赖 App 被打开（只存当前周的话，周日午夜后卡片会错误显示「没课」）。整学期课程直接复用 `AppViewModel.termCourses`（本来就会拉取），JSON 体积在可接受范围。`themePrimary` 让卡片标题强调色跟随功能二的主题色。
+
+注意分层：**文件里的快照是全量源数据**，而 `formProvider.updateForm()` 推送的 formData 只放当天渲染所需的精简摘要（updateForm 数据量有限制，全学期数据只走文件）。
 
 ### 数据流
 
 ```
 教务同步 / 缓存恢复（App 主进程）
-  → WidgetSnapshot.write(当前周整周课程 + 学期元信息 + 主题色)
-  → formProvider.updateForm(formId, formData)   // 立即推送，秒级生效
+  → WidgetSnapshot.write(整学期课程 + 学期元信息 + 主题色)
+  → formProvider.updateForm(formId, formData)   // 立即推送当天精简摘要，秒级生效
 
-系统定时（scheduledUpdateTime 00:30 / updateDuration）
+系统定时（updateDuration，每 30 分钟）
   → FormAbility.onUpdateForm
   → 读 WidgetSnapshot → 按今天日期重算当天课程 → 渲染
 ```
@@ -102,6 +104,7 @@
 1. 负一屏添加 2x2 / 2x4 卡片，显示今日课程
 2. App 内点「同步」后卡片秒级更新
 3. 修改系统时间跨午夜，卡片自动切到第二天课程
-4. 点击卡片拉起 App 到今日页
-5. 未登录时添加卡片显示引导占位
-6. 设置页切换主题色，各页面即时生效；杀进程重启后保持；深色模式下对比度正常
+4. 修改系统时间跨过周日→周一（进入下一周），不打开 App，卡片显示新一周的课程（验证整学期快照的跨周自算能力）
+5. 点击卡片拉起 App 到今日页
+6. 未登录时添加卡片显示引导占位
+7. 设置页切换主题色，各页面即时生效；杀进程重启后保持；深色模式下对比度正常
