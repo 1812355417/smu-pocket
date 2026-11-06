@@ -6,6 +6,10 @@
 
 > **非官方项目。** 与南方医科大学无任何隶属关系。数据直连学校系统，不经过任何第三方服务器；**只读不写**。
 
+## 贡献者
+
+- **sleepinlava** — HarmonyOS 端迁移与适配（含负一屏课表卡片、主题强调色）
+
 ## 构建
 
 需要 **DevEco Studio 5.0+**（HarmonyOS NEXT，API 12 / 5.0.0），官方支持 Windows / macOS：

@@ -1,6 +1,8 @@
 import { pasteboard } from '@kit.BasicServicesKit';
 import { promptAction } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { humanizeAgo } from '../core/TimeUtils';
+import { DEFAULT_THEME, ThemePreset, THEME_PRESETS, ThemeStore } from '../core/ThemeStore';
 import { AppViewModel } from '../viewmodel/AppViewModel';
 import { CardBox, LabelValue, ScreenHeader } from './Common';
 
@@ -17,11 +19,19 @@ const APP_VERSION: string = 'v1.0.0';
 @Component
 export struct SettingsPage {
   @ObjectLink vm: AppViewModel;
+  @StorageProp('themePrimary') readonly themePrimary: string = '#0A59F7';
+  @State currentThemeId: string = DEFAULT_THEME.id;
   private supportDialog: CustomDialogController = new CustomDialogController({
     builder: SupportDialog({}),
     autoCancel: true,
     customStyle: false,
   });
+
+  aboutToAppear(): void {
+    ThemeStore.load(getContext(this) as common.Context).then((preset) => {
+      this.currentThemeId = preset.id;
+    });
+  }
 
   build() {
     Scroll() {
@@ -44,6 +54,43 @@ export struct SettingsPage {
             .fontSize(11)
             .fontColor($r('app.color.app_text_secondary'))
             .margin({ top: 8 })
+        }
+
+        // ---- 主题色 ----
+        CardBox() {
+          Text('主题色')
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.app_text_primary'))
+            .margin({ bottom: 10 })
+
+          Flex({ wrap: FlexWrap.Wrap }) {
+            ForEach(THEME_PRESETS, (preset: ThemePreset) => {
+              Column() {
+                Column()
+                  .width(28)
+                  .height(28)
+                  .borderRadius(14)
+                  .backgroundColor(preset.primary)
+              }
+              .padding(3)
+              .borderRadius(20)
+              .border({
+                width: 2,
+                color: this.currentThemeId === preset.id ? this.themePrimary : Color.Transparent,
+              })
+              .margin({ right: 10, top: 4, bottom: 4 })
+              .onClick(() => {
+                this.pickTheme(preset);
+              })
+            }, (preset: ThemePreset) => preset.id)
+          }
+          .width('100%')
+
+          Text('按钮、选中态等强调色会跟随切换，课程配色不变')
+            .fontSize(11)
+            .fontColor($r('app.color.app_text_secondary'))
+            .margin({ top: 6 })
         }
 
         // ---- 接入状态 ----
@@ -149,6 +196,13 @@ export struct SettingsPage {
     .backgroundColor($r('app.color.app_page_bg'))
   }
 
+  private async pickTheme(preset: ThemePreset): Promise<void> {
+    this.currentThemeId = preset.id;
+    await ThemeStore.set(getContext(this) as common.Context, preset);
+    // 卡片标题色也跟随主题
+    this.vm.refreshWidgetTheme();
+  }
+
   private syncHint(): string {
     const tail = '如发现课程有变动或无法加载，请重新扫码登录。';
     if (this.vm.cachedAt !== null) {
@@ -182,6 +236,7 @@ export struct SettingsPage {
 /** 赞赏弹窗：文案 + 微信收款码 + 关闭按钮（纯自愿，和学校无关） */
 @CustomDialog
 struct SupportDialog {
+  @StorageProp('themePrimary') readonly themePrimary: string = '#0A59F7';
   controller: CustomDialogController = new CustomDialogController({ builder: SupportDialog({}) });
 
   build() {
@@ -203,7 +258,7 @@ struct SupportDialog {
 
       Button('关闭')
         .backgroundColor(Color.Transparent)
-        .fontColor($r('app.color.app_primary'))
+        .fontColor(this.themePrimary)
         .margin({ top: 12 })
         .onClick(() => {
           this.controller.close();

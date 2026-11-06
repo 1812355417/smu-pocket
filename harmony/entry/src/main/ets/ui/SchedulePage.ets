@@ -37,6 +37,7 @@ interface GridCell {
 @Component
 export struct SchedulePage {
   @ObjectLink vm: AppViewModel;
+  @StorageProp('themePrimary') readonly themePrimary: string = '#0A59F7';
   /** 选中周的镜像：@Watch 驱动周次条自动滚动（对应 Android 的 LaunchedEffect(selectedWeek)） */
   @Prop @Watch('onWeekChanged') selectedWeek: number = 1;
   private scroller: Scroller = new Scroller();
@@ -76,14 +77,14 @@ export struct SchedulePage {
         Row() {
           Button('← 上一周')
             .backgroundColor(Color.Transparent)
-            .fontColor($r('app.color.app_primary'))
+            .fontColor(this.themePrimary)
             .onClick(() => {
               this.vm.prevWeek();
             })
           Blank()
           Button('下一周 →')
             .backgroundColor(Color.Transparent)
-            .fontColor($r('app.color.app_primary'))
+            .fontColor(this.themePrimary)
             .onClick(() => {
               this.vm.nextWeek();
             })
@@ -122,7 +123,7 @@ export struct SchedulePage {
             .width(CHIP_WIDTH)
             .padding({ top: 8, bottom: 8 })
             .backgroundColor(week === this.vm.selectedWeek
-              ? $r('app.color.app_primary')
+              ? this.themePrimary
               : $r('app.color.app_cell_empty'))
             .borderRadius(18)
             .margin({ left: 3, right: 3 })

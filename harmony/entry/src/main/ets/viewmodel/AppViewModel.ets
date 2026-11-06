@@ -3,6 +3,7 @@ import { Semester } from '../core/Semester';
 import { LocalDate } from '../core/LocalDate';
 import { SessionExpiredException } from '../core/Http';
 import { SessionStore } from '../core/Session';
+import { WidgetBridge } from '../core/WidgetBridge';
 import {
   CacheStore,
   snapshotOf,
@@ -75,6 +76,8 @@ export class AppViewModel {
   private readonly session: SessionStore;
   private readonly cache: CacheStore;
   private jw: JwService;
+  /** 课表卡片推送。Index 装配后注入；为 null 时（极端时序）静默跳过 */
+  private widget: WidgetBridge | null = null;
 
   /** 设置页点了「同步」：这种情况下会话失效就直接回登录页 */
   private explicitSync: boolean = false;
@@ -88,6 +91,15 @@ export class AppViewModel {
     this.session = session;
     this.cache = cache;
     this.jw = jwProvider();
+  }
+
+  attachWidget(bridge: WidgetBridge): void {
+    this.widget = bridge;
+  }
+
+  /** 设置页切换主题后，让卡片标题色跟随 */
+  refreshWidgetTheme(): void {
+    this.widget?.refreshTheme();
   }
 
   // -------------------------------------------------------------------
@@ -347,6 +359,8 @@ export class AppViewModel {
     this.weekRequestSeq++;
     await this.session.clear();
     this.cache.clear();
+    // 退出登录后卡片不能再显示课表，回引导占位
+    this.widget?.clear();
     this.jw = this.jwProvider();
     this.resetState();
   }
@@ -632,6 +646,9 @@ export class AppViewModel {
       this.currentWeek,
       Date.now(),
     ));
+
+    // 课表卡片：整学期课表优先（卡片跨周自算全靠它），拿不到用当前周兜底
+    this.widget?.publish(config, this.termCourses, this.currentWeekCourses);
   }
 
   private static messageOf(e: Object, fallback: string): string {

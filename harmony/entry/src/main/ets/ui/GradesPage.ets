@@ -136,6 +136,7 @@ export struct GradesPage {
 
 @Component
 struct Stat {
+  @StorageProp('themePrimary') readonly themePrimary: string = '#0A59F7';
   label: string = '';
   value: string = '';
 
@@ -143,7 +144,7 @@ struct Stat {
     Column() {
       Text(this.value)
         .fontSize(20)
-        .fontColor($r('app.color.app_primary'))
+        .fontColor(this.themePrimary)
       Text(this.label)
         .fontSize(11)
         .fontColor($r('app.color.app_text_secondary'))

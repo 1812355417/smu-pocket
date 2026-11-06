@@ -22,7 +22,14 @@ enum TabIndex {
 @Component
 export struct RootView {
   @ObjectLink vm: AppViewModel;
+  @StorageProp('themePrimary') readonly themePrimary: string = '#0A59F7';
+  /** 卡片点击拉起时 EntryAbility 写入的目标 Tab */
+  @StorageProp('targetTab') @Watch('onTargetTab') targetTab: number = 0;
   @State currentTab: number = TabIndex.TODAY;
+
+  private onTargetTab(): void {
+    this.currentTab = this.targetTab;
+  }
 
   @Builder
   tabLabel(label: string, index: number) {
@@ -30,7 +37,7 @@ export struct RootView {
       .fontSize(16)
       .fontWeight(this.currentTab === index ? FontWeight.Medium : FontWeight.Normal)
       .fontColor(this.currentTab === index
-        ? $r('app.color.app_primary')
+        ? this.themePrimary
         : $r('app.color.app_text_secondary'))
       .padding({ top: 10, bottom: 10 })
   }

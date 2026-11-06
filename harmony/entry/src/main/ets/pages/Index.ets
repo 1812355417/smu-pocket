@@ -2,8 +2,10 @@ import { common } from '@kit.AbilityKit';
 import { CacheStore } from '../core/CacheStore';
 import { JwHttp } from '../core/Http';
 import { SessionStore } from '../core/Session';
+import { DEFAULT_THEME, ThemePreset, ThemeStore } from '../core/ThemeStore';
 import { HttpTransport } from '../core/Transport';
 import { TermStore } from '../core/TermStore';
+import { WidgetBridge } from '../core/WidgetBridge';
 import { BASE_URL, FakeJw, JwService } from '../data/JwService';
 import { RealJw } from '../data/RealJw';
 import { TermResolver } from '../data/TermResolver';
@@ -20,13 +22,22 @@ import { RootView } from '../ui/RootView';
 @Component
 struct Index {
   @State vm: AppViewModel | null = null;
+  @State themePreset: ThemePreset = DEFAULT_THEME;
+  /** 系统深/浅色变化时，用当前 preset 重算 dark 变体 */
+  @StorageProp('colorMode') @Watch('onColorModeChange') colorMode: number = 1;
 
   aboutToAppear(): void {
     this.setup();
   }
 
+  private onColorModeChange(): void {
+    ThemeStore.apply(this.themePreset, ThemeStore.isDark());
+  }
+
   private async setup(): Promise<void> {
     const context = getContext(this) as common.Context;
+    // 主题要先于首帧渲染就位，否则页面会先闪默认蓝再变
+    this.themePreset = await ThemeStore.load(context);
     const session = await SessionStore.create(context);
     const cache = new CacheStore(context);
     const terms = new TermResolver(new TermStore(context));
@@ -41,6 +52,7 @@ struct Index {
     };
 
     const vm = new AppViewModel(jwProvider, session, cache);
+    vm.attachWidget(new WidgetBridge(context));
     this.vm = vm;
     await vm.restore();
   }

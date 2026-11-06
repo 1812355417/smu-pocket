@@ -11,6 +11,14 @@
     {
       "name": "EntryAbility_label",
       "value": "南医大口袋"
+    },
+    {
+      "name": "schedule_card_name",
+      "value": "今日课程"
+    },
+    {
+      "name": "schedule_card_desc",
+      "value": "负一屏/桌面显示今天的课"
     }
   ]
 }

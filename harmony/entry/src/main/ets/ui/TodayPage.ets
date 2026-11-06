@@ -194,6 +194,7 @@ export struct TodayPage {
 /** 一条课程：左侧时间轴 + 右侧课名/教室/内容 */
 @Component
 struct CourseRow {
+  @StorageProp('themePrimary') readonly themePrimary: string = '#0A59F7';
   course: Course = new Course();
   config: TimetableConfig | null = null;
 
@@ -202,7 +203,7 @@ struct CourseRow {
       Column() {
         Text(this.startText())
           .fontSize(12)
-          .fontColor($r('app.color.app_primary'))
+          .fontColor(this.themePrimary)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(this.endText())
@@ -302,6 +303,7 @@ struct CourseRow {
 /** 一条考试：日期 + 课名（带网考号）+ 地点 · 时间 */
 @Component
 struct ExamRow {
+  @StorageProp('themePrimary') readonly themePrimary: string = '#0A59F7';
   exam: Course = new Course();
   examNumbers: Map<string, string> = new Map<string, string>();
 
@@ -310,7 +312,7 @@ struct ExamRow {
       Column() {
         Text(this.exam.date !== null ? this.exam.date.monthDayLabel() : '')
           .fontSize(12)
-          .fontColor($r('app.color.app_primary'))
+          .fontColor(this.themePrimary)
         Text(this.exam.date !== null ? `周${cn(this.exam.date.dayOfWeek)}` : '')
           .fontSize(11)
           .fontColor($r('app.color.app_text_secondary'))
@@ -368,6 +370,8 @@ struct ExamRow {
 /** 每天几节课的柱状概览，今天高亮 */
 @Component
 struct WeekBars {
+  @StorageProp('themePrimary') readonly themePrimary: string = '#0A59F7';
+  @StorageProp('themeSoft') readonly themeSoft: string = '#400A59F7';
   counts: number[] = [];
   todayIndex: number = 1;
 
@@ -378,7 +382,7 @@ struct WeekBars {
           Text(`${count}`)
             .fontSize(11)
             .fontColor(this.isToday(index)
-              ? $r('app.color.app_primary')
+              ? this.themePrimary
               : $r('app.color.app_text_secondary'))
 
           Column()
@@ -386,14 +390,14 @@ struct WeekBars {
             .height(this.barHeight(count))
             .borderRadius({ topLeft: 4, topRight: 4 })
             .backgroundColor(this.isToday(index)
-              ? $r('app.color.app_primary')
-              : $r('app.color.app_primary_soft'))
+              ? this.themePrimary
+              : this.themeSoft)
             .margin({ top: 4 })
 
           Text(DAY_LABELS[index])
             .fontSize(11)
             .fontColor(this.isToday(index)
-              ? $r('app.color.app_primary')
+              ? this.themePrimary
               : $r('app.color.app_text_secondary'))
             .margin({ top: 6 })
         }

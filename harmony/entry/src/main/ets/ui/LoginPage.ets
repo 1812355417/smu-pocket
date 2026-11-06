@@ -26,6 +26,7 @@ const HINT_AFTER_POLLS: number = 15; // 30 秒后提示一下
 @Component
 export struct LoginPage {
   @ObjectLink vm: AppViewModel;
+  @StorageProp('themePrimary') readonly themePrimary: string = '#0A59F7';
   @State showWeb: boolean = false;
 
   build() {
@@ -67,7 +68,7 @@ export struct LoginPage {
           .width('100%')
           .margin({ top: 8 })
           .backgroundColor(Color.Transparent)
-          .fontColor($r('app.color.app_primary'))
+          .fontColor(this.themePrimary)
           .onClick(() => {
             this.vm.enterDemo();
           })
@@ -99,6 +100,7 @@ export struct LoginPage {
 @Component
 struct LoginWeb {
   @ObjectLink vm: AppViewModel;
+  @StorageProp('themePrimary') readonly themePrimary: string = '#0A59F7';
   onClose: () => void = () => {
   };
 
@@ -245,7 +247,7 @@ struct LoginWeb {
           Text(this.hint)
             .fontSize(11)
             .fontColor(this.done
-              ? $r('app.color.app_primary')
+              ? this.themePrimary
               : $r('app.color.app_text_secondary'))
             .margin({ top: 2 })
         }
@@ -254,7 +256,7 @@ struct LoginWeb {
 
         Button('关闭')
           .backgroundColor(Color.Transparent)
-          .fontColor($r('app.color.app_primary'))
+          .fontColor(this.themePrimary)
           .onClick(() => {
             this.onClose();
           })
