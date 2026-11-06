@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "南医大口袋：课表、成绩、考试安排"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "南医大口袋主入口"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "南医大口袋"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+# 鸿蒙构建产物
+.cxx
+.idea
+.preview
+hvigor/hvigor-wrapper.js
+oh_modules
+**/build
+**/oh_modules
+**/.preview
+**/package-lock.json
+**/oh-package-lock.json5
+local.properties
+
+# 逻辑层离线测试的工作目录
+test/.work
+.hvigor
+.appanalyzer

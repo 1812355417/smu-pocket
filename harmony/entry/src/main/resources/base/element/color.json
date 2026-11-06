@@ -1,0 +1,44 @@
+{
+  "color": [
+    {
+      "name": "start_window_background",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "app_primary",
+      "value": "#0A59F7"
+    },
+    {
+      "name": "app_primary_soft",
+      "value": "#400A59F7"
+    },
+    {
+      "name": "app_page_bg",
+      "value": "#F1F3F5"
+    },
+    {
+      "name": "app_card_bg",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "app_text_primary",
+      "value": "#DE000000"
+    },
+    {
+      "name": "app_text_secondary",
+      "value": "#99000000"
+    },
+    {
+      "name": "app_cell_empty",
+      "value": "#14000000"
+    },
+    {
+      "name": "app_self_study",
+      "value": "#2E7D32"
+    },
+    {
+      "name": "app_error",
+      "value": "#F61A0E"
+    }
+  ]
+}
