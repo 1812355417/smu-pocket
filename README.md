@@ -1,8 +1,8 @@
-﻿<div align="center">
+<div align="center">
 
 # 南医大口袋 · SMU Pocket
 
-南方医科大学学生自用的 Android 客户端
+南方医科大学学生自用客户端：Android、Apple 原生迁移工程，以及 HarmonyOS（ArkTS + ArkUI）重建工程
 
 **课表 · 成绩 · 考试网考号 · 离线可用 · 深色模式**
 
@@ -12,7 +12,7 @@
 ![MinSdk](https://img.shields.io/badge/minSdk-26-blue)
 ![Version](https://img.shields.io/badge/release-v1.1.1-success)
 ![APK](https://img.shields.io/badge/APK-1.7%20MB-success)
-![Tests](https://img.shields.io/badge/tests-66%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-78%20passed-brightgreen)
 
 </div>
 
@@ -89,12 +89,31 @@ adb install -r smu-pocket-v1.1.1.apk
 | 登录 | `WebView` + `CookieManager` | 不接触密码，只采集 cookie |
 | 构建 | Gradle 8.9 · AGP 8.7.3 · JDK 17 | `compileSdk 35` / `minSdk 26` / `targetSdk 35` |
 | 压缩 | **R8**（`isMinifyEnabled = true`） | debug ~17 MB → release **1.7 MB** |
-| 测试 | JUnit 4 | **66 个单测**，跑夹具不需网络 |
+| 测试 | JUnit 4 | **78 个单测**，跑夹具不需网络 |
 
 **刻意的取舍**：不引 Hilt/Koin、不引 Room、不引 Navigation 库。整个 App 就两三个对象，
 手写容器（`AppContainer`）比引框架便宜；接口改版时只改 `data/model/Mappers.kt` 一个文件。
 
 ---
+
+## Apple 平台适配
+
+新增 [Apple 客户端与构建说明](apple/README.md)，支持 iPhone / iPad（iOS 17+）和 Mac（macOS 14+）。采用 SwiftUI 原生界面、可单独测试的 Swift 业务包、WKWebView 登录、Keychain 会话和加密离线缓存。Apple 工程通过 `apple/project.yml` 生成。
+
+```bash
+# 任意支持 Swift 的开发机：验证核心逻辑
+swift test --package-path apple/Packages/PocketCore
+# macOS + Xcode + XcodeGen：测试并构建 iOS 模拟器与 Mac 客户端
+bash scripts/check-apple.sh
+```
+
+Apple 工程与 Android 使用相同的脱敏接口测试夹具。真实登录与 Apple UI / 签名分发仍需在 Mac 和真机上验证，详见上述说明中的验收清单。
+
+## HarmonyOS 平台适配
+
+新增 [HarmonyOS 客户端与构建说明](harmony/README.md)：用 **ArkTS + ArkUI** 从零重建的鸿蒙原生工程（API 12 / HarmonyOS NEXT），功能与 Android 端逐条对齐——扫码登录（ArkWeb + cookie 探活）、14 节固定课表网格、按周拉取、考试网考号、分页成绩、HUKS AES-256-GCM 加密离线缓存、深浅色跟随系统。
+
+用 DevEco Studio 5.0+（Windows / macOS）打开 `harmony/` 目录即可构建运行。
 
 ## 快速开始
 
@@ -137,7 +156,7 @@ org.gradle.java.home=C:/path/to/your/jdk-17
 ### 4. 构建
 
 ```bash
-# 单元测试（不需要真机，66 个用例）
+# 单元测试（不需要真机，78 个用例）
 ./gradlew testDebugUnitTest
 
 # 调试包 → app/build/outputs/apk/debug/app-debug.apk
@@ -189,7 +208,7 @@ smu-pocket/
 │  │  ├─ RealJw.kt       真实实现：自举 + 按周拉取 + 分页成绩 + 网考号缓存
 │  │  └─ model/          JSON 模型、柔性序列化器、映射
 │  └─ ui/                今日 / 课表 / 成绩 / 设置 / 登录
-├─ app/src/test/         66 个单测 + 6 份脱敏夹具
+├─ app/src/test/         78 个单测 + 脱敏夹具
 ├─ docs/
 │  ├─ architecture.md    架构与关键机制
 │  ├─ capture-checklist.md  抓包清单（接口调研的起点）
