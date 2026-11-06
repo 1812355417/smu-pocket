@@ -151,7 +151,7 @@ export struct SettingsPage {
 
         // ---- 开发者与反馈 ----
         CardBox() {
-          Text('开发者：QIU')
+          Text('开发者：QIU 鸿蒙迁移适配者：sleepinlava')
             .fontSize(11)
             .fontColor($r('app.color.app_text_secondary'))
 
