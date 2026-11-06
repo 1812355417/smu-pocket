@@ -1,5 +1,6 @@
-﻿package com.smu.pocket.data.model
+package com.smu.pocket.data.model
 
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -11,6 +12,12 @@ import kotlinx.serialization.json.decodeFromJsonElement
  * 教务 JSON 的解码入口。所有容错逻辑集中在这里，模型保持干净。
  */
 object JwJson {
+
+    private fun responseCode(root: JsonObject): Int {
+        val value = root["code"] ?: return 0
+        return (value as? JsonPrimitive)?.content?.toIntOrNull()
+            ?: throw SerializationException("教务响应状态码无效")
+    }
 
     val format: Json = Json {
         // 真实课表一行有 40 个字段，模型只声明其中十几个，其余必须忽略
@@ -40,13 +47,14 @@ object JwJson {
         }
 
         val root = runCatching { format.parseToJsonElement(text) }.getOrNull() as? JsonObject
-            ?: return TimetableResponse()
+            ?: throw SerializationException("教务课表响应不是 JSON 对象")
 
-        val code = (root["code"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0
+        val code = responseCode(root)
         val message = (root["message"] as? JsonPrimitive)?.content.orEmpty()
 
         // 失败时 data 是 ""，只有成功时才是数组
-        val rows = root["data"] as? JsonArray ?: JsonArray(emptyList())
+        val rows = root["data"] as? JsonArray
+            ?: if (code != 0) JsonArray(emptyList()) else throw SerializationException("教务课表缺少 data 数组")
 
         return TimetableResponse(
             code = code,
@@ -67,19 +75,20 @@ object JwJson {
      */
     fun scores(body: String): ScoreResponse {
         val root = runCatching { format.parseToJsonElement(body) }.getOrNull() as? JsonObject
-            ?: return ScoreResponse()
+            ?: throw SerializationException("教务成绩响应不是 JSON 对象")
 
         val directRows = root["rows"] as? JsonArray
         val nestedData = root["data"] as? JsonObject
         val nestedRows = nestedData?.get("rows") as? JsonArray
-        val rowsJson = directRows ?: nestedRows ?: JsonArray(emptyList())
+        val rowsJson = directRows ?: nestedRows
+            ?: if (responseCode(root) != 0) JsonArray(emptyList()) else throw SerializationException("教务响应缺少 rows 数组")
 
         val total = (root["total"] as? JsonPrimitive)?.content?.toIntOrNull()
             ?: (nestedData?.get("total") as? JsonPrimitive)?.content?.toIntOrNull()
             ?: rowsJson.size
 
         return ScoreResponse(
-            code = (root["code"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0,
+            code = responseCode(root),
             message = (root["message"] as? JsonPrimitive)?.content.orEmpty(),
             data = (root["data"] as? JsonPrimitive)?.content.orEmpty(),
             rows = format.decodeFromJsonElement(rowsJson),
@@ -102,19 +111,20 @@ object JwJson {
         }
 
         val root = runCatching { format.parseToJsonElement(text) }.getOrNull() as? JsonObject
-            ?: return ExamTaskResponse()
+            ?: throw SerializationException("教务考试响应不是 JSON 对象")
 
         val directRows = root["rows"] as? JsonArray
         val nestedData = root["data"] as? JsonObject
         val nestedRows = nestedData?.get("rows") as? JsonArray
-        val rowsJson = directRows ?: nestedRows ?: JsonArray(emptyList())
+        val rowsJson = directRows ?: nestedRows
+            ?: if (responseCode(root) != 0) JsonArray(emptyList()) else throw SerializationException("教务响应缺少 rows 数组")
 
         val total = (root["total"] as? JsonPrimitive)?.content?.toIntOrNull()
             ?: (nestedData?.get("total") as? JsonPrimitive)?.content?.toIntOrNull()
             ?: rowsJson.size
 
         return ExamTaskResponse(
-            code = (root["code"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0,
+            code = responseCode(root),
             message = (root["message"] as? JsonPrimitive)?.content.orEmpty(),
             rows = format.decodeFromJsonElement(rowsJson),
             total = total,
